@@ -21,6 +21,9 @@ import MyBookingsPage from "./pages/MyBookingsPage.jsx";
 function App() {
   return (
     <Router>
+      <div className="bg-[#ff5f00] px-4 py-2 text-center text-sm font-semibold text-white">
+        Educational demo — use fictional details. No real rental or payment is processed.
+      </div>
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/login" element={<Login />} />

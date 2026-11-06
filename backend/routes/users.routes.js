@@ -2,6 +2,7 @@ const express = require("express");
 const pool = require("../db");
 const auth = require("../middleware/auth.middleware");
 const allowRoles = require("../middleware/role.middleware");
+const { isValidUserId } = auth;
 
 const router = express.Router();
 
@@ -47,8 +48,7 @@ router.get("/", auth, allowRoles("admin"), async (req, res) => {
 
     res.json(result.rows);
   } catch (err) {
-    console.error("USERS LIST ERROR:", err);
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: "Server error" });
   }
 });
 
@@ -58,9 +58,20 @@ router.get("/", auth, allowRoles("admin"), async (req, res) => {
  * @access  Protected (Any logged-in user)
  */
 router.put("/profile", auth, async (req, res) => {
+  if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) {
+    return res.status(400).json({ message: "Invalid profile details" });
+  }
+  const fields = [["phone", 20], ["street_address", 150], ["city", 80], ["postal_code", 20]];
+  const values = [];
+  for (const [field, maximum] of fields) {
+    const value = req.body[field];
+    if (value !== undefined && value !== null
+        && (typeof value !== "string" || value.length > maximum)) {
+      return res.status(400).json({ message: "Invalid profile details" });
+    }
+    values.push(typeof value === "string" ? value.trim() || null : null);
+  }
   try {
-    const { phone, street_address, city, postal_code } = req.body;
-
     const result = await pool.query(
       `UPDATE users
        SET phone = $1,
@@ -83,13 +94,7 @@ router.put("/profile", auth, async (req, res) => {
          country_code,
          created_at,
          updated_at`,
-      [
-        phone || null,
-        street_address || null,
-        city || null,
-        postal_code || null,
-        req.user.id,
-      ]
+      [...values, req.user.id]
     );
 
     if (result.rows.length === 0) {
@@ -101,8 +106,7 @@ router.put("/profile", auth, async (req, res) => {
       user: result.rows[0],
     });
   } catch (err) {
-    console.error("PROFILE UPDATE ERROR:", err);
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: "Server error" });
   }
 });
 
@@ -114,9 +118,10 @@ router.put("/profile", auth, async (req, res) => {
 router.delete("/:id", auth, allowRoles("admin"), async (req, res) => {
   try {
     const { id } = req.params;
+    if (!isValidUserId(id)) return res.status(400).json({ message: "Invalid user id" });
 
     const result = await pool.query(
-      "DELETE FROM users WHERE id = $1 RETURNING *",
+      "DELETE FROM users WHERE id = $1 RETURNING id, first_name, last_name, email, role",
       [id]
     );
 
@@ -129,8 +134,7 @@ router.delete("/:id", auth, allowRoles("admin"), async (req, res) => {
       user: result.rows[0],
     });
   } catch (err) {
-    console.error("USER DELETE ERROR:", err);
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: "Server error" });
   }
 });
 

@@ -1,12 +1,9 @@
 const { Pool } = require("pg");
-require("dotenv").config();
+const { database } = require("./config");
 
-const pool = new Pool({
-  host: process.env.PGHOST,
-  port: Number(process.env.PGPORT),
-  user: process.env.PGUSER,
-  password: process.env.PGPASSWORD,
-  database: process.env.PGDATABASE,
-});
+const pool = new Pool(database);
+// An idle connection can fail during a provider restart. Handle it without
+// logging connection strings, credentials, or request data.
+pool.on("error", () => console.error("An idle database connection failed"));
 
 module.exports = pool;

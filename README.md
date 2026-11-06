@@ -3,6 +3,8 @@
 AutoLuxe is a full-stack car rental management system built with React, Node.js, Express, PostgreSQL, and Docker Compose.  
 The system supports multiple user roles and provides a complete workflow for browsing cars, creating bookings, and managing fleet and user operations.
 
+For the secure public demo setup, use [the deployment guide](docs/DEPLOYMENT.md) and `render.yaml`. That path serves the React build and API from one HTTPS origin, runs non-destructive migrations, and keeps credentials in private environment settings. The older run/reset notes below describe the original development setup; do not execute `backend/schema.sql` against a hosted database.
+
 ## Main Features
 
 ### Public Features

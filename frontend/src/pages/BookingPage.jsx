@@ -184,6 +184,22 @@ export default function BookingPage() {
       return;
     }
 
+    if (totalDays > 30) {
+      setError("Rentals cannot exceed 30 days.");
+      return;
+    }
+
+    const now = Date.now();
+    if (new Date(formData.pickup_datetime).getTime() < now - 5 * 60 * 1000) {
+      setError("Pickup date cannot be in the past.");
+      return;
+    }
+
+    if (new Date(formData.return_datetime).getTime() > now + 365 * 24 * 60 * 60 * 1000) {
+      setError("Bookings must end within 365 days.");
+      return;
+    }
+
     const fullPhone = buildGermanPhone(phoneLocal);
 
     const mergedNotes = [formData.notes?.trim() || ""].filter(Boolean).join("\n");
@@ -197,17 +213,15 @@ export default function BookingPage() {
       });
 
       await createBooking({
-        user_id: user.id,
-        car_id: Number(carId),
-        pickup_datetime: formData.pickup_datetime,
-        return_datetime: formData.return_datetime,
-        total_price: totalPrice,
+        car_id: carId,
+        pickup_datetime: new Date(formData.pickup_datetime).toISOString(),
+        return_datetime: new Date(formData.return_datetime).toISOString(),
         payment_method: formData.payment_method,
         notes: mergedNotes,
       });
 
       window.scrollTo({ top: 0, behavior: "smooth" });
-      setSuccess("Booking request submitted successfully.");
+      setSuccess("Booking request submitted. Your reservation is held for 15 minutes pending confirmation.");
 
       setTimeout(() => {
         navigate("/my-bookings");
@@ -426,6 +440,7 @@ export default function BookingPage() {
                 <input
                   type="datetime-local"
                   name="pickup_datetime"
+                  required
                   value={formData.pickup_datetime}
                   onChange={handleChange}
                   className="w-full rounded-2xl border border-white/10 bg-[#1c1c1c] px-4 py-4 text-white outline-none [color-scheme:dark]"
@@ -439,6 +454,7 @@ export default function BookingPage() {
                 <input
                   type="datetime-local"
                   name="return_datetime"
+                  required
                   value={formData.return_datetime}
                   onChange={handleChange}
                   className="w-full rounded-2xl border border-white/10 bg-[#1c1c1c] px-4 py-4 text-white outline-none [color-scheme:dark]"
@@ -467,6 +483,7 @@ export default function BookingPage() {
                 </label>
                 <textarea
                   name="notes"
+                  maxLength={2000}
                   value={formData.notes}
                   onChange={handleChange}
                   rows="4"
