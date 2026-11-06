@@ -126,10 +126,13 @@ export default function Register() {
               type="password"
               name="password"
               required
+              minLength={12}
+              maxLength={72}
+              autoComplete="new-password"
               value={formData.password}
               onChange={handleChange}
               className="w-full bg-[#222] border border-gray-700 text-white p-3 rounded-lg focus:outline-none focus:border-[#ff5f00]"
-              placeholder="••••••••"
+              placeholder="At least 12 characters"
             />
           </div>
 

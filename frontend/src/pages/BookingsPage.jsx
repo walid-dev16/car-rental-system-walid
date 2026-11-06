@@ -17,6 +17,22 @@ import {
   StickyNote,
 } from "lucide-react";
 
+function toDateTimeLocal(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (part) => String(part).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function pendingHoldIsActive(booking, now) {
+  if (booking.status !== "pending") return false;
+  const expires = booking.expires_at
+    ? new Date(booking.expires_at).getTime()
+    : new Date(booking.created_at).getTime() + 15 * 60 * 1000;
+  return Number.isFinite(expires) && expires > now;
+}
+
 export default function BookingsPage() {
   const user = JSON.parse(localStorage.getItem("user") || "null");
   const [searchParams] = useSearchParams();
@@ -25,6 +41,7 @@ export default function BookingsPage() {
   const [bookings, setBookings] = useState([]);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [holdClock, setHoldClock] = useState(Date.now());
 
   const [editingBookingId, setEditingBookingId] = useState(null);
   const [editForm, setEditForm] = useState({
@@ -48,6 +65,11 @@ export default function BookingsPage() {
     };
 
     fetchData();
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => setHoldClock(Date.now()), 1000);
+    return () => clearInterval(timer);
   }, []);
 
   useEffect(() => {
@@ -126,13 +148,8 @@ export default function BookingsPage() {
   const openEditForm = (booking) => {
     setEditingBookingId(booking.id);
 
-    const pickupValue = booking.pickup_datetime
-      ? new Date(booking.pickup_datetime).toISOString().slice(0, 16)
-      : "";
-
-    const returnValue = booking.return_datetime
-      ? new Date(booking.return_datetime).toISOString().slice(0, 16)
-      : "";
+    const pickupValue = toDateTimeLocal(booking.pickup_datetime);
+    const returnValue = toDateTimeLocal(booking.return_datetime);
 
     setEditForm({
       pickup_datetime: pickupValue,
@@ -172,7 +189,7 @@ export default function BookingsPage() {
       await API.put(`/bookings/${editingBookingId}`, {
         pickup_datetime: new Date(editForm.pickup_datetime).toISOString(),
         return_datetime: new Date(editForm.return_datetime).toISOString(),
-        total_price: Number(editForm.total_price),
+        total_price: editForm.total_price,
       });
 
       await loadBookings();
@@ -187,7 +204,7 @@ export default function BookingsPage() {
     if (status === "booked") {
       return "border-green-500/30 bg-green-500/10 text-green-400";
     }
-    if (status === "cancelled") {
+    if (status === "cancelled" || status === "expired") {
       return "border-red-500/30 bg-red-500/10 text-red-400";
     }
     if (status === "pending") {
@@ -336,6 +353,9 @@ export default function BookingsPage() {
                 <input
                   type="number"
                   name="total_price"
+                  min="0.01"
+                  max="99999999.99"
+                  step="0.01"
                   value={editForm.total_price}
                   onChange={handleEditChange}
                   className="w-full rounded-2xl bg-[#222] p-3 text-white outline-none"
@@ -488,7 +508,7 @@ export default function BookingsPage() {
                       </div>
 
                       <div className="flex flex-wrap gap-3 xl:w-[260px] xl:flex-col">
-                        {!["booked", "cancelled"].includes(booking.status) && (
+                        {pendingHoldIsActive(booking, holdClock) && (
                           <button
                             onClick={() => handleComplete(booking.id)}
                             className="rounded-2xl bg-green-600 px-5 py-3 font-semibold text-white hover:bg-green-700"
@@ -497,7 +517,7 @@ export default function BookingsPage() {
                           </button>
                         )}
 
-                        {!["cancelled"].includes(booking.status) && (
+                        {!["cancelled", "expired"].includes(booking.status) && (
                           <button
                             onClick={() => handleCancel(booking.id)}
                             className="rounded-2xl bg-red-600 px-5 py-3 font-semibold text-white hover:bg-red-700"

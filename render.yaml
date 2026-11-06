@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: autoluxe-demo
+    runtime: node
+    plan: free
+    buildCommand: npm ci --omit=dev --prefix backend && npm ci --include=dev --prefix frontend && npm run build --prefix frontend
+    startCommand: node backend/scripts/migrate.js && node backend/index.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: 22.x
+      - key: TRUST_PROXY_HOPS
+        value: "1"
+      - key: PGPOOL_MAX
+        value: "5"
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true

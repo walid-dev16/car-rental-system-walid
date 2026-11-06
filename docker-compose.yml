@@ -1,32 +1,49 @@
 services:
   db:
     image: postgres:16
-    container_name: car_rental_db
-    restart: always
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: caradmin
-      POSTGRES_PASSWORD: carpass123
-      POSTGRES_DB: car_rental_db
-    ports:
-      - "5555:5432"
+      POSTGRES_USER: ${PGUSER:?Set PGUSER in the private backend/.env}
+      POSTGRES_PASSWORD: ${PGPASSWORD:?Set PGPASSWORD in the private backend/.env}
+      POSTGRES_DB: ${PGDATABASE:?Set PGDATABASE in the private backend/.env}
     volumes:
       - car_rental_data:/var/lib/postgresql/data
+    networks:
+      - database
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   backend:
     build: ./backend
-    container_name: car_rental_backend
-    restart: always
+    restart: unless-stopped
     ports:
-      - "5000:5000"
+      - "127.0.0.1:5000:5000"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     environment:
+      NODE_ENV: development
       PGHOST: db
       PGPORT: 5432
-      PGUSER: caradmin
-      PGPASSWORD: carpass123
-      PGDATABASE: car_rental_db
+      PGUSER: ${PGUSER:?Set PGUSER in the private backend/.env}
+      PGPASSWORD: ${PGPASSWORD:?Set PGPASSWORD in the private backend/.env}
+      PGDATABASE: ${PGDATABASE:?Set PGDATABASE in the private backend/.env}
+      PGSSL: "false"
+      JWT_SECRET: ${JWT_SECRET:?Set a random JWT_SECRET in the private backend/.env}
       PORT: 5000
+      TRUST_PROXY_HOPS: 0
+    command: ["sh", "-c", "node scripts/migrate.js && node index.js"]
+    networks:
+      - database
+      - application
 
 volumes:
   car_rental_data:
+
+networks:
+  database:
+    internal: true
+  application:
