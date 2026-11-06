@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import Register from "./Register.jsx";
+import { BRAND_NAME } from "../config/brand.js";
 
 const mockNavigate = vi.fn();
 const mockRegisterApi = vi.fn();
@@ -33,11 +34,11 @@ describe("Register Page", () => {
     );
 
     expect(screen.getByText(/Create Account/i)).toBeInTheDocument();
-    expect(screen.getByText(/Join SIXT Car Rental/i)).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`Join ${BRAND_NAME}`, "i"))).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/Enter your first name/i)).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/Enter your last name/i)).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/name@example.com/i)).toBeInTheDocument();
-    expect(screen.getByPlaceholderText(/••••••••/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/At least 12 characters/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Register/i })).toBeInTheDocument();
   });
 
@@ -51,7 +52,7 @@ describe("Register Page", () => {
     const firstNameInput = screen.getByPlaceholderText(/Enter your first name/i);
     const lastNameInput = screen.getByPlaceholderText(/Enter your last name/i);
     const emailInput = screen.getByPlaceholderText(/name@example.com/i);
-    const passwordInput = screen.getByPlaceholderText(/••••••••/i);
+    const passwordInput = screen.getByPlaceholderText(/At least 12 characters/i);
 
     fireEvent.change(firstNameInput, {
       target: { name: "first_name", value: "Walid" },
@@ -63,13 +64,13 @@ describe("Register Page", () => {
       target: { name: "email", value: "walid@test.com" },
     });
     fireEvent.change(passwordInput, {
-      target: { name: "password", value: "123456" },
+      target: { name: "password", value: "ValidPassword123!" },
     });
 
     expect(firstNameInput.value).toBe("Walid");
     expect(lastNameInput.value).toBe("Rafiq");
     expect(emailInput.value).toBe("walid@test.com");
-    expect(passwordInput.value).toBe("123456");
+    expect(passwordInput.value).toBe("ValidPassword123!");
   });
 
   it("shows loading state while submitting", async () => {
@@ -95,8 +96,8 @@ describe("Register Page", () => {
     fireEvent.change(screen.getByPlaceholderText(/name@example.com/i), {
       target: { name: "email", value: "walid@test.com" },
     });
-    fireEvent.change(screen.getByPlaceholderText(/••••••••/i), {
-      target: { name: "password", value: "123456" },
+    fireEvent.change(screen.getByPlaceholderText(/At least 12 characters/i), {
+      target: { name: "password", value: "ValidPassword123!" },
     });
 
     fireEvent.click(screen.getByRole("button", { name: /Register/i }));
@@ -126,8 +127,8 @@ describe("Register Page", () => {
     fireEvent.change(screen.getByPlaceholderText(/name@example.com/i), {
       target: { name: "email", value: "walid@test.com" },
     });
-    fireEvent.change(screen.getByPlaceholderText(/••••••••/i), {
-      target: { name: "password", value: "123456" },
+    fireEvent.change(screen.getByPlaceholderText(/At least 12 characters/i), {
+      target: { name: "password", value: "ValidPassword123!" },
     });
 
     fireEvent.click(screen.getByRole("button", { name: /Register/i }));
@@ -136,7 +137,7 @@ describe("Register Page", () => {
       first_name: "Walid",
       last_name: "Rafiq",
       email: "walid@test.com",
-      password: "123456",
+      password: "ValidPassword123!",
     });
 
     expect(
@@ -168,8 +169,8 @@ describe("Register Page", () => {
     fireEvent.change(screen.getByPlaceholderText(/name@example.com/i), {
       target: { name: "email", value: "walid@test.com" },
     });
-    fireEvent.change(screen.getByPlaceholderText(/••••••••/i), {
-      target: { name: "password", value: "123456" },
+    fireEvent.change(screen.getByPlaceholderText(/At least 12 characters/i), {
+      target: { name: "password", value: "ValidPassword123!" },
     });
 
     fireEvent.click(screen.getByRole("button", { name: /Register/i }));

@@ -1,32 +1,30 @@
-const express = require("express");
-const cors = require("cors");
-require("dotenv").config();
+const { port } = require("./config");
+const app = require("./app");
+const pool = require("./db");
 
-const authRoutes = require("./routes/auth.routes.js");
-const bookingsRoutes = require("./routes/bookings.routes.js");
-const carsRoutes = require("./routes/cars.routes.js");
-const dashboardRoutes = require("./routes/dashboard.routes.js");
-const usersRoutes = require("./routes/users.routes.js");
-
-const app = express();
-
-/* Global middleware configuration */
-app.use(cors());
-app.use(express.json());
-
-/* API route registration */
-app.use("/api/auth", authRoutes);
-app.use("/api/bookings", bookingsRoutes);
-app.use("/api/cars", carsRoutes);
-app.use("/api/dashboard", dashboardRoutes);
-app.use("/api/users", usersRoutes);
-
-/* Fallback handler for undefined routes */
-app.use((req, res) => {
-  res.status(404).json({ message: "API Route not found" });
+const server = app.listen(port, "0.0.0.0", () => {
+  console.log(`AutoLuxe listening on port ${port}`);
 });
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-});
+server.requestTimeout = 30000;
+server.headersTimeout = 15000;
+
+let stopping = false;
+function shutdown() {
+  if (stopping) return;
+  stopping = true;
+  const deadline = setTimeout(() => process.exit(1), 10000);
+  deadline.unref();
+  server.close(async () => {
+    try {
+      await pool.end();
+      clearTimeout(deadline);
+      process.exit(0);
+    } catch {
+      process.exit(1);
+    }
+  });
+}
+
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);

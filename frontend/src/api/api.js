@@ -1,8 +1,16 @@
 import axios from 'axios';
 
+// Keep requests on the page's origin in production and through Vite's proxy
+// during development. A build-time override must also be a same-origin path.
+const configuredBaseURL = import.meta.env.VITE_API_URL || '/api';
+if (!/^\/(?!\/)[A-Za-z0-9/_-]*$/.test(configuredBaseURL)) {
+  throw new Error('VITE_API_URL must be a same-origin absolute path such as /api');
+}
+
 /* Shared Axios instance for all frontend API requests */
 const API = axios.create({
-  baseURL: 'http://localhost:5000/api',
+  baseURL: configuredBaseURL.replace(/\/+$/, '') || '/',
+  timeout: 20000,
 });
 
 /* Attach JWT token automatically to protected requests */

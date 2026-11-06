@@ -1,8 +1,11 @@
-backend/node_modules
-frontend/node_modules
-backend/.env
-frontend/.env
-frontend/coverage
+**/node_modules/
+**/dist/
+**/coverage/
+**/.env
+**/.env.*
+!**/.env.example
 .git
 .DS_Store
 *.log
+*.dump
+*.backup
