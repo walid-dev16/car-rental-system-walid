@@ -80,15 +80,15 @@ describe("FeaturedCars Component", () => {
     expect(screen.getAllByText(/5.0/i).length).toBe(3);
   });
 
-  it("renders car images with alt text", () => {
+  it("uses each featured car's bundled image and model name", () => {
     render(
       <MemoryRouter>
         <FeaturedCars />
       </MemoryRouter>
     );
 
-    expect(screen.getByAltText(/BMW X5/i)).toBeInTheDocument();
-    expect(screen.getByAltText(/Mercedes-Benz CLE/i)).toBeInTheDocument();
-    expect(screen.getByAltText(/Audi A6 E-Tron/i)).toBeInTheDocument();
+    expect(screen.getByAltText("BMW X5")).toHaveAttribute("src", "/fleet/x5.webp");
+    expect(screen.getByAltText("Mercedes-Benz CLE")).toHaveAttribute("src", "/fleet/cle.webp");
+    expect(screen.getByAltText("Audi A6 E-Tron")).toHaveAttribute("src", "/fleet/a6-e-tron.webp");
   });
 });

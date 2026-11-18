@@ -8,24 +8,21 @@ export default function FeaturedCars() {
       brand: "BMW",
       model: "X5",
       price: 310,
-      image:
-        "https://img.sixt.com/2800/515a4846-a4c1-46f4-8e6c-8031151e5e89.jpg",
+      image: "/fleet/x5.webp",
     },
     {
       id: 14,
       brand: "Mercedes-Benz",
       model: "CLE",
       price: 280,
-      image:
-        "https://img.sixt.com/2800/2a352fec-1b42-482e-b97c-c31dfc951a86.png",
+      image: "/fleet/cle.webp",
     },
     {
       id: 13,
       brand: "Audi",
       model: "A6 E-Tron",
       price: 260,
-      image:
-        "https://img.sixt.com/2800/bce9f85e-57ce-4959-9b62-19a7e0d7294b.png",
+      image: "/fleet/a6-e-tron.webp",
     },
   ];
 

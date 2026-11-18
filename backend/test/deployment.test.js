@@ -118,6 +118,21 @@ test("production serves the built SPA for browser GET navigation and real bundle
   assert.notEqual(await script.text(), frontendHTML);
 });
 
+test("production serves the eight credited demo fleet photos as WebP images", async () => {
+  const credits = await request("/fleet/credits.html");
+  assert.equal(credits.status, 200);
+  const page = await credits.text();
+  const names = [...page.matchAll(/<img\s+src="([^"]+\.webp)"/g)].map(match => match[1]);
+  assert.equal(new Set(names).size, 8);
+  for (const name of names) {
+    const image = await request(`/fleet/${name}`);
+    assert.equal(image.status, 200, name);
+    assert.match(image.headers.get("content-type"), /^image\/webp/);
+    const bytes = Buffer.from(await image.arrayBuffer());
+    assert.equal(bytes.toString("ascii", 8, 12), "WEBP", name);
+  }
+});
+
 test("SPA fallback excludes non-HTML requests and methods other than GET", async () => {
   for (const options of [
     { headers: { Accept: "application/json" } },
