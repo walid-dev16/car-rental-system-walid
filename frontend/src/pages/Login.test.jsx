@@ -19,8 +19,8 @@ vi.mock("../api/api.js", () => ({
 }));
 
 vi.mock("../config/brand.js", () => ({
-  BRAND_NAME: "AutoLuxe",
-  BRAND_TAGLINE: "Premium Car Rental",
+  BRAND_NAME: "Login Brand",
+  BRAND_TAGLINE: "Login Brand Tagline",
 }));
 
 describe("Login Page", () => {
@@ -37,8 +37,8 @@ describe("Login Page", () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText(/AutoLuxe/i)).toBeInTheDocument();
-    expect(screen.getByText(/Premium Car Rental/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "Login Brand" })).toBeInTheDocument();
+    expect(screen.getByText("Login Brand Tagline")).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/name@example.com/i)).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/••••••••/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Sign In/i })).toBeInTheDocument();

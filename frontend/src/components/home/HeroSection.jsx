@@ -5,17 +5,28 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import TimePicker from "./TimePicker.jsx";
 
-const CITY_OPTIONS = ["Erfurt", "Berlin", "Frankfurt", "Munich", "Hamburg"];
+import { BRANCHES } from "../../booking/branches.js";
+import { branchTimeInput, rentalPeriod } from "../../booking/time.js";
+
+function calendarTime(day, time) {
+  if (!day) return "";
+  const month = String(day.getMonth() + 1).padStart(2, "0");
+  const date = String(day.getDate()).padStart(2, "0");
+  return `${day.getFullYear()}-${month}-${date}T${time}`;
+}
 
 export default function HeroSection() {
   const navigate = useNavigate();
 
-  const [pickupCity, setPickupCity] = useState("Erfurt");
-  const [dropoffCity, setDropoffCity] = useState("Erfurt");
+  const [pickupCity, setPickupCity] = useState("");
+  const [dropoffCity, setDropoffCity] = useState("");
   const [pickupDate, setPickupDate] = useState(null);
   const [returnDate, setReturnDate] = useState(null);
   const [pickupTime, setPickupTime] = useState("12:00");
   const [returnTime, setReturnTime] = useState("12:00");
+
+  const [error, setError] = useState("");
+  const todayInBerlin = new Date(branchTimeInput(new Date()).slice(0, 10) + "T00:00");
 
   const handleSearchCars = () => {
     const params = new URLSearchParams();
@@ -23,20 +34,19 @@ export default function HeroSection() {
     if (pickupCity) params.set("city", pickupCity);
     if (dropoffCity) params.set("dropoffCity", dropoffCity);
 
-    if (pickupDate) {
-      const [pickupHour, pickupMinute] = pickupTime.split(":");
-      const pickupDateTime = new Date(pickupDate);
-      pickupDateTime.setHours(Number(pickupHour), Number(pickupMinute), 0, 0);
-      params.set("pickupDate", pickupDateTime.toISOString());
+    if (pickupDate || returnDate) {
+      const pickup = calendarTime(pickupDate, pickupTime);
+      const dropoff = calendarTime(returnDate, returnTime);
+      const period = rentalPeriod(pickup, dropoff);
+      if (period.error) {
+        setError(period.error);
+        return;
+      }
+      params.set("pickupDate", pickup);
+      params.set("returnDate", dropoff);
     }
 
-    if (returnDate) {
-      const [returnHour, returnMinute] = returnTime.split(":");
-      const returnDateTime = new Date(returnDate);
-      returnDateTime.setHours(Number(returnHour), Number(returnMinute), 0, 0);
-      params.set("returnDate", returnDateTime.toISOString());
-    }
-
+    setError("");
     navigate(`/cars?${params.toString()}`);
   };
 
@@ -45,6 +55,7 @@ export default function HeroSection() {
       <div className="absolute inset-0">
         <img
           src="https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=1600&q=80"
+          onError={({ currentTarget }) => { if (!currentTarget.src.endsWith("/luxury-showcase.png")) currentTarget.src = "/luxury-showcase.png"; }}
           alt="Luxury car"
           className="h-full w-full object-cover opacity-55"
         />
@@ -95,11 +106,13 @@ export default function HeroSection() {
                 Pick-up Location
               </label>
               <select
+                aria-label="Pickup branch"
                 value={pickupCity}
                 onChange={(e) => setPickupCity(e.target.value)}
                 className="w-full rounded-2xl border border-white/5 bg-[#2a2a2a] px-4 py-4 text-base text-white outline-none"
               >
-                {CITY_OPTIONS.map((city) => (
+                <option value="">All branches</option>
+                {BRANCHES.map((city) => (
                   <option key={city} value={city} className="bg-[#1c1c1c]">
                     {city}, Germany
                   </option>
@@ -113,11 +126,13 @@ export default function HeroSection() {
                 Drop-off Location
               </label>
               <select
+                aria-label="Return branch"
                 value={dropoffCity}
                 onChange={(e) => setDropoffCity(e.target.value)}
                 className="w-full rounded-2xl border border-white/5 bg-[#2a2a2a] px-4 py-4 text-base text-white outline-none"
               >
-                {CITY_OPTIONS.map((city) => (
+                <option value="">All branches</option>
+                {BRANCHES.map((city) => (
                   <option key={city} value={city} className="bg-[#1c1c1c]">
                     {city}, Germany
                   </option>
@@ -128,7 +143,7 @@ export default function HeroSection() {
             <div className="rounded-3xl border border-white/10 bg-[#111]/85 p-4">
               <label className="mb-3 flex items-center gap-2 text-sm font-medium text-gray-300">
                 <CalendarDays size={16} />
-                Pick-up Date
+                Pick-up Date (Berlin)
               </label>
 
               <div className="grid grid-cols-[1fr_140px] gap-3">
@@ -139,7 +154,7 @@ export default function HeroSection() {
                     selectsStart
                     startDate={pickupDate}
                     endDate={returnDate}
-                    minDate={new Date()}
+                    minDate={todayInBerlin}
                     placeholderText="Select pickup date"
                     dateFormat="dd/MM/yyyy"
                     className="w-full bg-transparent py-3 text-base text-white outline-none placeholder:text-gray-400"
@@ -160,7 +175,7 @@ export default function HeroSection() {
             <div className="rounded-3xl border border-white/10 bg-[#111]/85 p-4">
               <label className="mb-3 flex items-center gap-2 text-sm font-medium text-gray-300">
                 <CalendarDays size={16} />
-                Return Date
+                Return Date (Berlin)
               </label>
 
               <div className="grid grid-cols-[1fr_140px] gap-3">
@@ -171,7 +186,7 @@ export default function HeroSection() {
                     selectsEnd
                     startDate={pickupDate}
                     endDate={returnDate}
-                    minDate={pickupDate || new Date()}
+                    minDate={pickupDate || todayInBerlin}
                     placeholderText="Select return date"
                     dateFormat="dd/MM/yyyy"
                     className="w-full bg-transparent py-3 text-base text-white outline-none placeholder:text-gray-400"
@@ -190,6 +205,7 @@ export default function HeroSection() {
             </div>
           </div>
 
+          {error && <p role="alert" className="mt-3 text-red-400">{error}</p>}
           <button
             onClick={handleSearchCars}
             className="mt-6 block w-full rounded-2xl bg-[#ff5f00] px-6 py-4 text-center text-lg font-bold text-white transition hover:scale-[1.01] hover:bg-[#e55500]"

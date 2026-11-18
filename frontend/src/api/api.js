@@ -1,8 +1,24 @@
 import axios from 'axios';
+import { clearSession } from '../auth/session.js';
+import { bookingAuthLink } from '../booking/bookingNavigation.js';
 
 /* Shared Axios instance for all frontend API requests */
 const API = axios.create({
-  baseURL: 'http://localhost:5000/api',
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
+});
+
+API.interceptors.response.use(undefined, (error) => {
+  const token = localStorage.getItem('token');
+  if (error.response?.status === 401 && token &&
+      error.config?.headers?.Authorization === `Bearer ${token}` &&
+      !error.config.url?.startsWith('/auth/')) {
+    clearSession();
+    localStorage.setItem('session_expired_message', 'Session expired. Please login again.');
+    const { pathname, search } = window.location;
+    window.location.assign(/^\/booking\/\d+$/.test(pathname)
+      ? bookingAuthLink('/login', pathname + search) : '/login');
+  }
+  return Promise.reject(error);
 });
 
 /* Attach JWT token automatically to protected requests */
@@ -21,7 +37,7 @@ export const login = (formData) => API.post('/auth/login', formData);
 export const register = (formData) => API.post('/auth/register', formData);
 
 export const fetchCars = () => API.get('/cars');
-export const fetchAvailableCars = () => API.get('/cars/available');
+export const fetchAvailableCars = (params) => API.get('/cars/available', { params });
 export const addCar = (carData) => API.post('/cars', carData);
 export const editCar = (id, carData) => API.put(`/cars/${id}`, carData);
 export const updateCarStatus = (id, status) =>

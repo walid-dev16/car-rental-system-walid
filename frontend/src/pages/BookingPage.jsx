@@ -1,24 +1,12 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import API, { createBooking, updateProfile } from "../api/api.js";
 import Navbar from "../components/home/Navbar.jsx";
 import Footer from "../components/home/Footer.jsx";
 
-function toDateTimeLocal(value) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-
-  const pad = (num) => String(num).padStart(2, "0");
-
-  const year = date.getFullYear();
-  const month = pad(date.getMonth() + 1);
-  const day = pad(date.getDate());
-  const hours = pad(date.getHours());
-  const minutes = pad(date.getMinutes());
-
-  return `${year}-${month}-${day}T${hours}:${minutes}`;
-}
+import { branchTimeInput, rentalPeriod } from "../booking/time.js";
+import { getCarBranches } from "../booking/branches.js";
+import { getSessionUser, saveSession } from "../auth/session.js";
 
 function getGermanLocalPhone(rawPhone = "") {
   const cleaned = String(rawPhone).replace(/\s+/g, "").trim();
@@ -40,21 +28,24 @@ export default function BookingPage() {
   const { carId } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const user = JSON.parse(localStorage.getItem("user") || "null");
+  const user = getSessionUser();
+  const destination = user?.role === "customer" ? "/my-bookings" : "/bookings";
 
   const [car, setCar] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [redirectCountdown, setRedirectCountdown] = useState(7);
+  const [submitting, setSubmitting] = useState(false);
 
   const [phoneLocal, setPhoneLocal] = useState(
     getGermanLocalPhone(user?.phone || "")
   );
 
   const [formData, setFormData] = useState({
-    pickup_datetime: toDateTimeLocal(searchParams.get("pickupDate")),
-    return_datetime: toDateTimeLocal(searchParams.get("returnDate")),
+    pickup_datetime: branchTimeInput(searchParams.get("pickupDate")),
+    return_datetime: branchTimeInput(searchParams.get("returnDate")),
+    pickup_branch: searchParams.get("city") || searchParams.get("dropoffCity") || "",
+    dropoff_branch: searchParams.get("dropoffCity") || searchParams.get("city") || "",
     payment_method: "cash",
     street_address: user?.street_address || "",
     city: user?.city || "",
@@ -63,72 +54,39 @@ export default function BookingPage() {
   });
 
   useEffect(() => {
-    const loadCar = async () => {
+    let current = true;
+    async function loadCar() {
+      setLoading(true);
+      setError("");
       try {
         const { data } = await API.get(`/cars/${carId}`);
-        setCar(data);
+        if (current) setCar(data);
       } catch (err) {
-        setError(err?.response?.data?.message || "Failed to load car details.");
+        if (current) {
+          setCar(null);
+          setError(err.response?.data?.message || "Failed to load car details.");
+        }
       } finally {
-        setLoading(false);
+        if (current) setLoading(false);
       }
-    };
-
+    }
     loadCar();
+    return () => { current = false; };
   }, [carId]);
 
   useEffect(() => {
-    if (error) {
-      const timer = setTimeout(() => {
-        setError("");
-      }, 7000);
-
-      return () => clearTimeout(timer);
-    }
-  }, [error]);
-
-  useEffect(() => {
     if (!success) return;
+    const timer = setTimeout(() => navigate(destination, { replace: true }), 2500);
+    return () => clearTimeout(timer);
+  }, [success, navigate, destination]);
 
-    setRedirectCountdown(7);
-
-    const clearTimer = setTimeout(() => {
-      setSuccess("");
-    }, 7000);
-
-    const countdownTimer = setInterval(() => {
-      setRedirectCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(countdownTimer);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => {
-      clearTimeout(clearTimer);
-      clearInterval(countdownTimer);
-    };
-  }, [success]);
-
-  const totalDays = useMemo(() => {
-    if (!formData.pickup_datetime || !formData.return_datetime) return 0;
-
-    const start = new Date(formData.pickup_datetime);
-    const end = new Date(formData.return_datetime);
-
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 0;
-    if (end <= start) return 0;
-
-    const diffMs = end.getTime() - start.getTime();
-    return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-  }, [formData.pickup_datetime, formData.return_datetime]);
-
-  const totalPrice = useMemo(() => {
-    if (!car || !totalDays) return 0;
-    return Number(car.daily_price) * totalDays;
-  }, [car, totalDays]);
+  const branches = getCarBranches(car?.available_branches);
+  const selectedBranch = (branch) => branches.includes(branch) ? branch : branches.length === 1 ? branches[0] : "";
+  const pickupBranch = selectedBranch(formData.pickup_branch);
+  const dropoffBranch = selectedBranch(formData.dropoff_branch);
+  const period = rentalPeriod(formData.pickup_datetime, formData.return_datetime);
+  const totalDays = period.days || 0;
+  const totalPrice = (Number(car?.daily_price) || 0) * totalDays;
 
   function handleChange(e) {
     const { name, value } = e.target;
@@ -141,8 +99,8 @@ export default function BookingPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submitting || success) return;
     setError("");
-    setSuccess("");
 
     if (!user) {
       setError("Please login first to continue booking.");
@@ -179,41 +137,45 @@ export default function BookingPage() {
       return;
     }
 
-    if (totalDays <= 0) {
-      setError("Return date/time must be after pickup date/time.");
+    if (period.error) {
+      setError(period.error);
+      return;
+    }
+    if (branches.length && (!pickupBranch || !dropoffBranch)) {
+      setError("Choose a pickup branch and a return branch.");
       return;
     }
 
-    const fullPhone = buildGermanPhone(phoneLocal);
-
-    const mergedNotes = [formData.notes?.trim() || ""].filter(Boolean).join("\n");
-
+    setSubmitting(true);
     try {
-      await updateProfile({
-        phone: fullPhone,
-        street_address: formData.street_address,
-        city: formData.city,
-        postal_code: formData.postal_code,
+      const token = localStorage.getItem("token");
+      const { data: profile } = await updateProfile({
+        phone: buildGermanPhone(getGermanLocalPhone(phoneLocal)),
+        street_address: formData.street_address.trim(),
+        city: formData.city.trim(),
+        postal_code: formData.postal_code.trim(),
       });
-
-      await createBooking({
+      if (!token || localStorage.getItem("token") !== token || String(getSessionUser()?.id) !== String(user.id)) {
+        setError("Your session changed. Please reopen the booking.");
+        return;
+      }
+      if (String(profile.user?.id) === String(user.id)) saveSession(token, profile.user);
+      const { data: booking } = await createBooking({
         user_id: user.id,
-        car_id: Number(carId),
+        car_id: carId,
         pickup_datetime: formData.pickup_datetime,
         return_datetime: formData.return_datetime,
-        total_price: totalPrice,
+        pickup_branch: pickupBranch || null,
+        dropoff_branch: dropoffBranch || null,
         payment_method: formData.payment_method,
-        notes: mergedNotes,
+        notes: formData.notes.trim(),
       });
-
       window.scrollTo({ top: 0, behavior: "smooth" });
-      setSuccess("Booking request submitted successfully.");
-
-      setTimeout(() => {
-        navigate("/my-bookings");
-      }, 7000);
+      setSuccess(`Booking #${booking.id} submitted. Total: €${booking.total_price}.`);
     } catch (err) {
-      setError(err?.response?.data?.message || "Failed to create booking.");
+      setError(err.response?.data?.message || "Failed to create booking.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -270,8 +232,7 @@ export default function BookingPage() {
           <div className="mb-6 rounded-lg border border-green-500 bg-green-500/10 p-4 text-green-400">
             <p className="font-semibold">{success}</p>
             <p className="mt-2 text-sm text-green-300">
-              You will be redirected to My Bookings in {redirectCountdown} second
-              {redirectCountdown !== 1 ? "s" : ""}.
+              Opening {destination === "/my-bookings" ? "My Bookings" : "Booking Management"}…
             </p>
           </div>
         )}
@@ -419,13 +380,29 @@ export default function BookingPage() {
                 />
               </div>
 
+              {branches.length ? [
+                ["pickup_branch", "Pickup branch", pickupBranch],
+                ["dropoff_branch", "Return branch", dropoffBranch],
+              ].map(([name, label, value]) => (
+                <div key={name}>
+                  <label htmlFor={name} className="mb-2 block text-sm font-medium text-gray-300">{label}</label>
+                  <select id={name} name={name} value={value} onChange={handleChange} required
+                    className="w-full rounded-2xl bg-[#1c1c1c] px-4 py-4 text-white">
+                    <option value="">Select a branch</option>
+                    {branches.map((branch) => <option key={branch}>{branch}</option>)}
+                  </select>
+                </div>
+              )) : <p className="text-sm text-gray-400">Pickup and return branches need to be arranged with the rental office.</p>}
+
               <div>
                 <label className="mb-2 block text-sm font-medium text-gray-300">
-                  Pick-up Date & Time
+                  Pick-up Date & Time (Berlin)
                 </label>
                 <input
                   type="datetime-local"
                   name="pickup_datetime"
+                  aria-label="Pickup time (Berlin)"
+                  min={branchTimeInput(new Date())}
                   value={formData.pickup_datetime}
                   onChange={handleChange}
                   className="w-full rounded-2xl border border-white/10 bg-[#1c1c1c] px-4 py-4 text-white outline-none [color-scheme:dark]"
@@ -434,11 +411,13 @@ export default function BookingPage() {
 
               <div>
                 <label className="mb-2 block text-sm font-medium text-gray-300">
-                  Return Date & Time
+                  Return Date & Time (Berlin)
                 </label>
                 <input
                   type="datetime-local"
                   name="return_datetime"
+                  aria-label="Return time (Berlin)"
+                  min={formData.pickup_datetime || branchTimeInput(new Date())}
                   value={formData.return_datetime}
                   onChange={handleChange}
                   className="w-full rounded-2xl border border-white/10 bg-[#1c1c1c] px-4 py-4 text-white outline-none [color-scheme:dark]"
@@ -499,9 +478,10 @@ export default function BookingPage() {
               <div className="flex gap-3">
                 <button
                   type="submit"
+                  disabled={submitting || Boolean(success) || car.operational_status === "maintenance" || car.status === "maintenance"}
                   className="flex-1 rounded-2xl bg-[#ff5f00] px-6 py-4 font-bold text-white transition hover:bg-[#e55500]"
                 >
-                  Confirm Booking
+                  {submitting ? "Submitting…" : "Confirm Booking"}
                 </button>
 
                 <button

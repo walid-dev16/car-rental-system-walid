@@ -1,12 +1,20 @@
 import React, { useEffect, useState } from "react";
 import DashboardHeader from "../components/DashboardHeader.jsx";
 import { fetchCars, addCar, deleteCar, editCar } from "../api/api.js";
+import { BRANCHES, getCarBranches } from "../booking/branches.js";
 
-const BRANCH_OPTIONS = ["Erfurt", "Berlin", "Frankfurt", "Munich", "Hamburg"];
+const CATEGORIES = ["economy", "sedan", "suv", "luxury", "sports"];
+const TRANSMISSIONS = ["automatic", "manual"];
+const FUELS = ["petrol", "diesel", "hybrid", "electric"];
+
+function choicesWithCurrent(options, current) {
+  return current && !options.includes(current) ? [...options, current] : options;
+}
 
 export default function AdminCars() {
   const [cars, setCars] = useState([]);
   const [editingCarId, setEditingCarId] = useState(null);
+  const [branchesChanged, setBranchesChanged] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [deleteSuccess, setDeleteSuccess] = useState("");
@@ -68,6 +76,7 @@ export default function AdminCars() {
   }
 
   function handleBranchChange(branch) {
+    setBranchesChanged(true);
     setFormData((prev) => {
       const exists = prev.available_branches.includes(branch);
 
@@ -81,6 +90,7 @@ export default function AdminCars() {
   }
 
   function handleEdit(car) {
+    setBranchesChanged(false);
     setFormData({
       brand: car.brand || "",
       model: car.model || "",
@@ -91,12 +101,10 @@ export default function AdminCars() {
       transmission: car.transmission || "",
       fuel_type: car.fuel_type || "",
       daily_price: car.daily_price?.toString() || "",
-      status: car.status || "available",
+      status: car.operational_status || car.status || "available",
       image_url: car.image_url || "",
       description: car.description || "",
-      available_branches: car.available_branches
-        ? car.available_branches.split(",").map((item) => item.trim()).filter(Boolean)
-        : [],
+      available_branches: getCarBranches(car.available_branches),
       technical_specifications: car.technical_specifications || "",
       safety_features: car.safety_features || "",
       performance_info: car.performance_info || "",
@@ -112,6 +120,7 @@ export default function AdminCars() {
 
   function handleCancelEdit() {
     setEditingCarId(null);
+    setBranchesChanged(false);
     setFormData({
       brand: "",
       model: "",
@@ -146,17 +155,17 @@ export default function AdminCars() {
         ...formData,
         production_year: Number(formData.production_year),
         seats: Number(formData.seats),
-        daily_price: Number(formData.daily_price),
+        daily_price: formData.daily_price.trim(),
         doors: formData.doors ? Number(formData.doors) : null,
         available_branches: formData.available_branches.join(", "),
       };
 
       if (editingCarId) {
+        // Editing other fields must preserve branch names stored by an older installation.
+        payload.preserve_available_branches = !branchesChanged;
         await editCar(editingCarId, payload);
-        setSuccess("Car updated successfully.");
       } else {
         await addCar(payload);
-        setSuccess("Car added successfully.");
       }
 
       handleCancelEdit();
@@ -173,6 +182,7 @@ export default function AdminCars() {
   }
 
   async function handleDelete(id) {
+    if (!window.confirm("Delete this car from the fleet?")) return;
     setError("");
     setSuccess("");
     setDeleteSuccess("");
@@ -186,10 +196,14 @@ export default function AdminCars() {
 
       await loadCars();
       setDeleteSuccess("Car deleted successfully.");
-    } catch {
-      setError("Failed to delete car");
+    } catch (err) {
+      setError(err?.response?.data?.message || "Failed to delete car");
     }
   }
+
+  const originalBranches = cars.find((car) => car.id === editingCarId)?.available_branches;
+  const legacyBranches = String(originalBranches || "").split(",")
+    .map((name) => name.trim()).filter((name) => name && !getCarBranches(name).length);
 
   return (
     <div className="min-h-screen bg-black p-8 text-white">
@@ -222,6 +236,7 @@ export default function AdminCars() {
           <form onSubmit={handleSubmit} className="grid gap-4">
             <input
               name="brand"
+              maxLength={50}
               value={formData.brand}
               onChange={handleChange}
               placeholder="Brand"
@@ -231,6 +246,7 @@ export default function AdminCars() {
 
             <input
               name="model"
+              maxLength={50}
               value={formData.model}
               onChange={handleChange}
               placeholder="Model"
@@ -238,39 +254,37 @@ export default function AdminCars() {
               required
             />
 
-            <select
+            <input
               name="production_year"
+              type="number"
+              aria-label="Production year"
+              placeholder="Production year"
+              min={1886}
+              max={new Date().getFullYear() + 1}
+              step="1"
               value={formData.production_year}
               onChange={handleChange}
               className="rounded-lg bg-[#222] p-3 text-white outline-none"
               required
-            >
-              <option value="">Select Year</option>
-              <option value="2021">2021</option>
-              <option value="2022">2022</option>
-              <option value="2023">2023</option>
-              <option value="2024">2024</option>
-              <option value="2025">2025</option>
-              <option value="2026">2026</option>
-            </select>
+            />
 
             <select
               name="category"
+              aria-label="Category"
               value={formData.category}
               onChange={handleChange}
               className="rounded-lg bg-[#222] p-3 text-white outline-none"
               required
             >
               <option value="">Select Category</option>
-              <option value="economy">economy</option>
-              <option value="sedan">sedan</option>
-              <option value="suv">suv</option>
-              <option value="luxury">luxury</option>
-              <option value="sports">sports</option>
+              {choicesWithCurrent(CATEGORIES, formData.category).map((choice) => (
+                <option key={choice} value={choice}>{choice}</option>
+              ))}
             </select>
 
             <input
               name="plate_number"
+              maxLength={20}
               value={formData.plate_number}
               onChange={handleChange}
               placeholder="Plate Number"
@@ -278,62 +292,68 @@ export default function AdminCars() {
               required
             />
 
-            <select
+            <input
               name="seats"
+              type="number"
+              aria-label="Seats"
+              placeholder="Seats"
+              min={1}
+              max={20}
+              step="1"
               value={formData.seats}
               onChange={handleChange}
               className="rounded-lg bg-[#222] p-3 text-white outline-none"
               required
-            >
-              <option value="">Select Seats</option>
-              <option value="2">2</option>
-              <option value="4">4</option>
-              <option value="5">5</option>
-              <option value="7">7</option>
-              <option value="8">8</option>
-            </select>
+            />
 
-            <select
+            <input
               name="doors"
+              type="number"
+              aria-label="Doors"
+              placeholder="Doors"
+              min={1}
+              max={10}
+              step="1"
               value={formData.doors}
               onChange={handleChange}
               className="rounded-lg bg-[#222] p-3 text-white outline-none"
-            >
-              <option value="">Select Doors</option>
-              <option value="2">2 doors</option>
-              <option value="3">3 doors</option>
-              <option value="4">4 doors</option>
-              <option value="5">5 doors</option>
-            </select>
+            />
 
             <select
               name="transmission"
+              aria-label="Transmission"
               value={formData.transmission}
               onChange={handleChange}
               className="rounded-lg bg-[#222] p-3 text-white outline-none"
               required
             >
               <option value="">Select Transmission</option>
-              <option value="automatic">Automatic</option>
-              <option value="manual">Manual</option>
+              {choicesWithCurrent(TRANSMISSIONS, formData.transmission).map((choice) => (
+                <option key={choice} value={choice}>{choice}</option>
+              ))}
             </select>
 
             <select
               name="fuel_type"
+              aria-label="Fuel type"
               value={formData.fuel_type}
               onChange={handleChange}
               className="rounded-lg bg-[#222] p-3 text-white outline-none"
               required
             >
               <option value="">Select Fuel Type</option>
-              <option value="petrol">petrol</option>
-              <option value="diesel">diesel</option>
-              <option value="hybrid">hybrid</option>
-              <option value="electric">electric</option>
+              {choicesWithCurrent(FUELS, formData.fuel_type).map((choice) => (
+                <option key={choice} value={choice}>{choice}</option>
+              ))}
             </select>
 
             <input
               name="daily_price"
+              type="number"
+              aria-label="Daily price"
+              min="0.01"
+              max="99999999.99"
+              step="0.01"
               value={formData.daily_price}
               onChange={handleChange}
               placeholder="Daily Price"
@@ -343,6 +363,7 @@ export default function AdminCars() {
 
             <input
               name="image_url"
+              maxLength={4096}
               value={formData.image_url}
               onChange={handleChange}
               placeholder="Image URL"
@@ -351,8 +372,13 @@ export default function AdminCars() {
 
             <div className="rounded-xl border border-gray-700 bg-[#181818] p-4">
               <p className="mb-3 font-semibold text-white">Available Branches</p>
+              {legacyBranches.length > 0 && (
+                <p className="mb-3 text-sm text-gray-300">
+                  The saved list also includes {legacyBranches.join(", ")}. Changing the branch selection replaces that list.
+                </p>
+              )}
               <div className="grid grid-cols-2 gap-3">
-                {BRANCH_OPTIONS.map((branch) => (
+                {BRANCHES.map((branch) => (
                   <label key={branch} className="flex items-center gap-2 text-sm text-gray-300">
                     <input
                       type="checkbox"
@@ -367,6 +393,7 @@ export default function AdminCars() {
 
             <textarea
               name="description"
+              maxLength={20000}
               value={formData.description}
               onChange={handleChange}
               placeholder="Car Description"
@@ -376,6 +403,7 @@ export default function AdminCars() {
 
             <textarea
               name="technical_specifications"
+              maxLength={20000}
               value={formData.technical_specifications}
               onChange={handleChange}
               placeholder="Technical Specifications"
@@ -385,6 +413,7 @@ export default function AdminCars() {
 
             <textarea
               name="safety_features"
+              maxLength={20000}
               value={formData.safety_features}
               onChange={handleChange}
               placeholder="Safety Features"
@@ -394,6 +423,7 @@ export default function AdminCars() {
 
             <textarea
               name="performance_info"
+              maxLength={20000}
               value={formData.performance_info}
               onChange={handleChange}
               placeholder="Performance Info"
@@ -401,8 +431,10 @@ export default function AdminCars() {
               className="rounded-lg bg-[#222] p-3 text-white outline-none"
             />
 
+            <label htmlFor="car-operational-status" className="text-sm text-gray-300">Operational status</label>
             <select
               name="status"
+              id="car-operational-status"
               value={formData.status}
               onChange={handleChange}
               className="rounded-lg bg-[#222] p-3 text-white outline-none"
@@ -457,7 +489,7 @@ export default function AdminCars() {
                     </p>
 
                     <p className="mt-1 text-sm text-gray-400">
-                      Status: {car.status}
+                      Availability: {car.status}
                     </p>
 
                     {car.available_branches && (

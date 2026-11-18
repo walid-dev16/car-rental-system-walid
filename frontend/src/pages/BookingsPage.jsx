@@ -1,3 +1,6 @@
+import { branchTimeInput, formatBranchTime } from "../booking/time.js";
+import { bookingCounts, bookingStatusStyle } from "../booking/status.js";
+import { getSessionUser } from "../auth/session.js";
 import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import API from "../api/api.js";
@@ -18,7 +21,7 @@ import {
 } from "lucide-react";
 
 export default function BookingsPage() {
-  const user = JSON.parse(localStorage.getItem("user") || "null");
+  const user = getSessionUser();
   const [searchParams] = useSearchParams();
   const selectedUserId = searchParams.get("userId");
 
@@ -51,15 +54,14 @@ export default function BookingsPage() {
   }, []);
 
   useEffect(() => {
-    if (error || success) {
+    if (success) {
       const timer = setTimeout(() => {
-        setError("");
         setSuccess("");
       }, 4000);
 
       return () => clearTimeout(timer);
     }
-  }, [error, success]);
+  }, [success]);
 
   const filteredBookings = useMemo(() => {
     if (!selectedUserId) return bookings;
@@ -68,15 +70,7 @@ export default function BookingsPage() {
     );
   }, [bookings, selectedUserId]);
 
-  const stats = useMemo(() => {
-    const source = filteredBookings;
-    return {
-      total: source.length,
-      pending: source.filter((b) => b.status === "pending").length,
-      booked: source.filter((b) => b.status === "booked").length,
-      cancelled: source.filter((b) => b.status === "cancelled").length,
-    };
-  }, [filteredBookings]);
+  const stats = useMemo(() => bookingCounts(filteredBookings), [filteredBookings]);
 
   const handleComplete = async (id) => {
     setError("");
@@ -126,18 +120,10 @@ export default function BookingsPage() {
   const openEditForm = (booking) => {
     setEditingBookingId(booking.id);
 
-    const pickupValue = booking.pickup_datetime
-      ? new Date(booking.pickup_datetime).toISOString().slice(0, 16)
-      : "";
-
-    const returnValue = booking.return_datetime
-      ? new Date(booking.return_datetime).toISOString().slice(0, 16)
-      : "";
-
     setEditForm({
-      pickup_datetime: pickupValue,
-      return_datetime: returnValue,
-      total_price: booking.total_price?.toString() || "",
+      pickup_datetime: branchTimeInput(booking.pickup_datetime),
+      return_datetime: branchTimeInput(booking.return_datetime),
+      total_price: "",
     });
 
     setError("");
@@ -166,14 +152,21 @@ export default function BookingsPage() {
     setError("");
     setSuccess("");
 
-    if (!editingBookingId) return;
+    const original = bookings.find((booking) => booking.id === editingBookingId);
+    if (!original) return;
 
     try {
-      await API.put(`/bookings/${editingBookingId}`, {
-        pickup_datetime: new Date(editForm.pickup_datetime).toISOString(),
-        return_datetime: new Date(editForm.return_datetime).toISOString(),
-        total_price: Number(editForm.total_price),
-      });
+      const changes = {};
+      let datesChanged = false;
+      for (const field of ["pickup_datetime", "return_datetime"]) {
+        const changed = editForm[field] !== branchTimeInput(original[field]);
+        // Preserve sub-minute precision and the original offset across the autumn clock change.
+        changes[field] = changed ? editForm[field] : original[field];
+        datesChanged ||= changed;
+      }
+      if (editForm.total_price) changes.total_price = editForm.total_price;
+      else if (!datesChanged) changes.total_price = original.total_price;
+      await API.put(`/bookings/${editingBookingId}`, changes);
 
       await loadBookings();
       setSuccess("Booking updated successfully.");
@@ -181,36 +174,6 @@ export default function BookingsPage() {
     } catch (err) {
       setError(err?.response?.data?.message || "Failed to update booking");
     }
-  };
-
-  const getStatusStyle = (status) => {
-    if (status === "booked") {
-      return "border-green-500/30 bg-green-500/10 text-green-400";
-    }
-    if (status === "cancelled") {
-      return "border-red-500/30 bg-red-500/10 text-red-400";
-    }
-    if (status === "pending") {
-      return "border-yellow-500/30 bg-yellow-500/10 text-yellow-400";
-    }
-    if (status === "completed") {
-      return "border-blue-500/30 bg-blue-500/10 text-blue-400";
-    }
-    return "border-white/10 bg-white/5 text-gray-300";
-  };
-
-  const formatDateTime = (value) => {
-    if (!value) return "N/A";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return value;
-
-    return date.toLocaleString("en-GB", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
   };
 
   return (
@@ -302,11 +265,12 @@ export default function BookingsPage() {
 
             <form onSubmit={handleUpdateBooking} className="grid gap-4 md:grid-cols-3">
               <div>
-                <label className="mb-2 block text-sm text-gray-400">
-                  Pickup Date & Time
+                <label htmlFor="edit-pickup" className="mb-2 block text-sm text-gray-400">
+                  Pickup Date & Time (Berlin)
                 </label>
                 <input
                   type="datetime-local"
+                  id="edit-pickup"
                   name="pickup_datetime"
                   value={editForm.pickup_datetime}
                   onChange={handleEditChange}
@@ -316,11 +280,12 @@ export default function BookingsPage() {
               </div>
 
               <div>
-                <label className="mb-2 block text-sm text-gray-400">
-                  Return Date & Time
+                <label htmlFor="edit-return" className="mb-2 block text-sm text-gray-400">
+                  Return Date & Time (Berlin)
                 </label>
                 <input
                   type="datetime-local"
+                  id="edit-return"
                   name="return_datetime"
                   value={editForm.return_datetime}
                   onChange={handleEditChange}
@@ -330,17 +295,22 @@ export default function BookingsPage() {
               </div>
 
               <div>
-                <label className="mb-2 block text-sm text-gray-400">
-                  Total Price
+                <label htmlFor="edit-price" className="mb-2 block text-sm text-gray-400">
+                  Override total price (€)
                 </label>
                 <input
                   type="number"
+                  id="edit-price"
+                  min="0.01"
+                  step="0.01"
                   name="total_price"
                   value={editForm.total_price}
                   onChange={handleEditChange}
                   className="w-full rounded-2xl bg-[#222] p-3 text-white outline-none"
-                  required
                 />
+                <p className="mt-1 text-sm text-gray-400">
+                  Leave blank to keep the current price or recalculate it when dates change.
+                </p>
               </div>
 
               <div className="flex gap-3 md:col-span-3">
@@ -404,7 +374,7 @@ export default function BookingsPage() {
 
                           <div className="flex flex-wrap gap-3">
                             <span
-                              className={`inline-flex rounded-full border px-4 py-2 text-sm font-semibold ${getStatusStyle(
+                              className={`inline-flex rounded-full border px-4 py-2 text-sm font-semibold ${bookingStatusStyle(
                                 booking.status
                               )}`}
                             >
@@ -456,10 +426,10 @@ export default function BookingsPage() {
                               Booking Time
                             </p>
                             <p className="mt-3 text-sm text-white">
-                              Pickup: {formatDateTime(booking.pickup_datetime)}
+                              Pickup: {formatBranchTime(booking.pickup_datetime)} · {booking.pickup_branch || "Branch to be arranged"}
                             </p>
                             <p className="mt-1 text-sm text-white">
-                              Return: {formatDateTime(booking.return_datetime)}
+                              Return: {formatBranchTime(booking.return_datetime)} · {booking.dropoff_branch || "Branch to be arranged"}
                             </p>
                           </div>
 
@@ -488,7 +458,7 @@ export default function BookingsPage() {
                       </div>
 
                       <div className="flex flex-wrap gap-3 xl:w-[260px] xl:flex-col">
-                        {!["booked", "cancelled"].includes(booking.status) && (
+                        {booking.status === "pending" && (
                           <button
                             onClick={() => handleComplete(booking.id)}
                             className="rounded-2xl bg-green-600 px-5 py-3 font-semibold text-white hover:bg-green-700"
@@ -508,13 +478,13 @@ export default function BookingsPage() {
 
                         {user?.role === "admin" && (
                           <>
-                            <button
+                            {booking.status !== "expired" && <button
                               onClick={() => openEditForm(booking)}
                               className="flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-5 py-3 font-semibold text-white hover:border-white/30"
                             >
                               <Pencil size={16} />
                               Edit Booking
-                            </button>
+                            </button>}
 
                             <button
                               onClick={() => handleDeleteBooking(booking.id)}

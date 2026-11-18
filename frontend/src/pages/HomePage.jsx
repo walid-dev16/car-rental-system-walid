@@ -10,7 +10,7 @@ export default function HomePage() {
     <div className="min-h-screen bg-black text-white">
       <Navbar />
       <HeroSection />
-        <LuxuryShowcase />
+      <LuxuryShowcase />
       <FeaturedCars />
       <WhyChooseUs />
       <Footer />

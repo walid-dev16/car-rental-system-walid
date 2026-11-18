@@ -1,4 +1,6 @@
-import { Link, useNavigate } from "react-router-dom";
+import { dashboardPath, getSessionUser, clearSession } from "../../auth/session.js";
+import { bookingAuthLink, getBookingReturnTo } from "../../booking/bookingNavigation.js";
+import { useSearchParams, Link, useNavigate } from "react-router-dom";
 import {
   CarFront,
   LayoutDashboard,
@@ -13,25 +15,20 @@ import {
 
 export default function Navbar() {
   const navigate = useNavigate();
-  const user = JSON.parse(localStorage.getItem("user") || "null");
+  const user = getSessionUser();
+  const [params] = useSearchParams();
+  const returnTo = getBookingReturnTo(params);
   const role = user?.role;
 
   function handleLogout() {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
+    clearSession();
     navigate("/");
   }
 
-  function getDashboardPath() {
-    if (!user) return "/";
-    if (role === "admin") return "/admin-dashboard";
-    if (role === "staff") return "/staff-dashboard";
-    return "/customer-dashboard";
-  }
 
   return (
     <header className="sticky top-0 z-50 border-b border-white/10 bg-black/55 backdrop-blur-xl">
-      <div className="mx-auto flex max-w-[1500px] items-center justify-between px-6 py-4">
+      <div className="mx-auto flex max-w-[1500px] flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-4">
         <Link to="/" className="flex items-center gap-3 transition hover:opacity-90">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#ff5f00] shadow-[0_10px_30px_rgba(255,95,0,0.25)]">
             <CarFront size={24} className="text-white" />
@@ -43,7 +40,7 @@ export default function Navbar() {
           </div>
         </Link>
 
-        <nav className="hidden items-center gap-8 md:flex">
+        <nav className="order-last flex w-full items-center gap-5 md:order-none md:w-auto md:gap-8">
           <Link
             to="/cars"
             className="text-sm font-semibold text-gray-200 transition hover:text-[#ff8a3d]"
@@ -66,7 +63,7 @@ export default function Navbar() {
           </Link>
         </nav>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           {user ? (
             <>
               <div className="hidden rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-right lg:block">
@@ -125,7 +122,7 @@ export default function Navbar() {
               )}
 
               <Link
-                to={getDashboardPath()}
+                to={dashboardPath(user?.role)}
                 className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:border-[#ff5f00]/40 hover:bg-white/10"
               >
                 <LayoutDashboard size={16} />
@@ -143,7 +140,15 @@ export default function Navbar() {
           ) : (
             <>
               <Link
-                to="/login"
+                to="/"
+                className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:border-white/30 hover:bg-white/10"
+              >
+                <House size={16} />
+                Home
+              </Link>
+
+              <Link
+                to={returnTo ? bookingAuthLink("/login", returnTo) : "/login"}
                 className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:border-white/30 hover:bg-white/10"
               >
                 <LogIn size={16} />
@@ -151,7 +156,7 @@ export default function Navbar() {
               </Link>
 
               <Link
-                to="/register"
+                to={returnTo ? bookingAuthLink("/register", returnTo) : "/register"}
                 className="flex items-center gap-2 rounded-2xl bg-[#ff5f00] px-4 py-3 text-sm font-bold text-white transition hover:scale-105 hover:bg-[#e55500]"
               >
                 <UserPlus size={16} />

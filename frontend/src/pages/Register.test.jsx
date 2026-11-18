@@ -32,12 +32,12 @@ describe("Register Page", () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText(/Create Account/i)).toBeInTheDocument();
-    expect(screen.getByText(/Join SIXT Car Rental/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "Create Account" })).toBeInTheDocument();
+    expect(screen.getByText("Join AutoLuxe - Premium Car Rental")).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/Enter your first name/i)).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/Enter your last name/i)).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/name@example.com/i)).toBeInTheDocument();
-    expect(screen.getByPlaceholderText(/••••••••/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/••••••••/i)).toHaveAttribute("minlength", "12");
     expect(screen.getByRole("button", { name: /Register/i })).toBeInTheDocument();
   });
 
@@ -63,13 +63,13 @@ describe("Register Page", () => {
       target: { name: "email", value: "walid@test.com" },
     });
     fireEvent.change(passwordInput, {
-      target: { name: "password", value: "123456" },
+      target: { name: "password", value: "sample-passphrase" },
     });
 
     expect(firstNameInput.value).toBe("Walid");
     expect(lastNameInput.value).toBe("Rafiq");
     expect(emailInput.value).toBe("walid@test.com");
-    expect(passwordInput.value).toBe("123456");
+    expect(passwordInput.value).toBe("sample-passphrase");
   });
 
   it("shows loading state while submitting", async () => {
@@ -96,7 +96,7 @@ describe("Register Page", () => {
       target: { name: "email", value: "walid@test.com" },
     });
     fireEvent.change(screen.getByPlaceholderText(/••••••••/i), {
-      target: { name: "password", value: "123456" },
+      target: { name: "password", value: "sample-passphrase" },
     });
 
     fireEvent.click(screen.getByRole("button", { name: /Register/i }));
@@ -127,7 +127,7 @@ describe("Register Page", () => {
       target: { name: "email", value: "walid@test.com" },
     });
     fireEvent.change(screen.getByPlaceholderText(/••••••••/i), {
-      target: { name: "password", value: "123456" },
+      target: { name: "password", value: "sample-passphrase" },
     });
 
     fireEvent.click(screen.getByRole("button", { name: /Register/i }));
@@ -136,11 +136,11 @@ describe("Register Page", () => {
       first_name: "Walid",
       last_name: "Rafiq",
       email: "walid@test.com",
-      password: "123456",
+      password: "sample-passphrase",
     });
 
     expect(
-      await screen.findByText(/Account created successfully. Redirecting to login.../i)
+      await screen.findByText("Registration request received. You can now try signing in.")
     ).toBeInTheDocument();
   });
 
@@ -169,7 +169,7 @@ describe("Register Page", () => {
       target: { name: "email", value: "walid@test.com" },
     });
     fireEvent.change(screen.getByPlaceholderText(/••••••••/i), {
-      target: { name: "password", value: "123456" },
+      target: { name: "password", value: "sample-passphrase" },
     });
 
     fireEvent.click(screen.getByRole("button", { name: /Register/i }));

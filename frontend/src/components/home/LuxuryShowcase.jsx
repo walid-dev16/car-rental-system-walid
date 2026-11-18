@@ -42,6 +42,7 @@ export default function LuxuryShowcase() {
         >
           <img
             src="https://img.sixt.com/2800/40da47cb-e2a0-415f-b18f-d2f59cb05b8d.jpg"
+            onError={({ currentTarget }) => { if (!currentTarget.src.endsWith("/luxury-showcase.png")) currentTarget.src = "/luxury-showcase.png"; }}
             alt="Luxury cars"
             className="h-full w-full object-cover" 
           />

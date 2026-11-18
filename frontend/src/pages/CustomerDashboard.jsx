@@ -1,3 +1,6 @@
+import { formatBranchTime } from "../booking/time.js";
+import { bookingCounts, bookingStatusStyle } from "../booking/status.js";
+import { getSessionUser } from "../auth/session.js";
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchAvailableCars, fetchMyBookings } from "../api/api.js";
@@ -17,7 +20,7 @@ import {
 
 export default function CustomerDashboard() {
   const navigate = useNavigate();
-  const user = JSON.parse(localStorage.getItem("user") || "null");
+  const user = getSessionUser();
 
   const [cars, setCars] = useState([]);
   const [myBookings, setMyBookings] = useState([]);
@@ -44,60 +47,13 @@ export default function CustomerDashboard() {
     loadDashboardData();
   }, []);
 
-  useEffect(() => {
-    if (error) {
-      const timer = setTimeout(() => {
-        setError("");
-      }, 5000);
+  const stats = useMemo(() => bookingCounts(myBookings), [myBookings]);
 
-      return () => clearTimeout(timer);
-    }
-  }, [error]);
-
-  const stats = useMemo(() => {
-    const total = myBookings.length;
-    const pending = myBookings.filter((b) => b.status === "pending").length;
-    const booked = myBookings.filter((b) => b.status === "booked").length;
-    const cancelled = myBookings.filter((b) => b.status === "cancelled").length;
-
-    return { total, pending, booked, cancelled };
-  }, [myBookings]);
-
-  const latestBooking = useMemo(() => {
-    if (!myBookings.length) return null;
-    return myBookings[0];
-  }, [myBookings]);
+  const latestBooking = myBookings[0];
 
   const featuredCars = useMemo(() => {
     return cars.slice(0, 6);
   }, [cars]);
-
-  const formatDateTime = (value) => {
-    if (!value) return "N/A";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return value;
-
-    return date.toLocaleString("en-GB", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
-  const getStatusStyle = (status) => {
-    if (status === "booked") {
-      return "border-green-500/30 bg-green-500/10 text-green-400";
-    }
-    if (status === "cancelled") {
-      return "border-red-500/30 bg-red-500/10 text-red-400";
-    }
-    if (status === "pending") {
-      return "border-yellow-500/30 bg-yellow-500/10 text-yellow-400";
-    }
-    return "border-white/10 bg-white/5 text-gray-300";
-  };
 
   return (
     <div className="min-h-screen bg-black p-8 text-white">
@@ -142,7 +98,7 @@ export default function CustomerDashboard() {
         </div>
       )}
 
-      {loading ? (
+      {error ? null : loading ? (
         <div className="rounded-3xl border border-white/10 bg-[#111] p-10 text-center text-gray-400">
           Loading dashboard...
         </div>
@@ -224,7 +180,7 @@ export default function CustomerDashboard() {
                         </div>
 
                         <span
-                          className={`inline-flex rounded-full border px-4 py-2 text-sm font-semibold ${getStatusStyle(
+                          className={`inline-flex rounded-full border px-4 py-2 text-sm font-semibold ${bookingStatusStyle(
                             latestBooking.status
                           )}`}
                         >
@@ -238,7 +194,7 @@ export default function CustomerDashboard() {
                             Pick-up
                           </p>
                           <p className="mt-3 text-sm text-white">
-                            {formatDateTime(latestBooking.pickup_datetime)}
+                            {formatBranchTime(latestBooking.pickup_datetime)} · {latestBooking.pickup_branch || "Branch to be arranged"}
                           </p>
                         </div>
 
@@ -247,7 +203,7 @@ export default function CustomerDashboard() {
                             Return
                           </p>
                           <p className="mt-3 text-sm text-white">
-                            {formatDateTime(latestBooking.return_datetime)}
+                            {formatBranchTime(latestBooking.return_datetime)} · {latestBooking.dropoff_branch || "Branch to be arranged"}
                           </p>
                         </div>
 

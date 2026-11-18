@@ -17,6 +17,7 @@ import ContactPage from "./pages/ContactPage.jsx";
 import WhyUsPage from "./pages/WhyUsPage.jsx";
 import BookingPage from "./pages/BookingPage.jsx";
 import MyBookingsPage from "./pages/MyBookingsPage.jsx";
+import MessagesPage from "./pages/MessagesPage.jsx";
 
 function App() {
   return (
@@ -102,6 +103,9 @@ function App() {
           }
         />
 
+        <Route path="/messages" element={
+          <ProtectedRoute allowedRoles={["admin", "staff"]}><MessagesPage /></ProtectedRoute>
+        } />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </Router>

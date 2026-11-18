@@ -1,69 +1,64 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { fetchAvailableCars } from "../api/api.js";
 import Navbar from "../components/home/Navbar.jsx";
 import Footer from "../components/home/Footer.jsx";
 
-const CITY_OPTIONS = ["Erfurt", "Berlin", "Frankfurt", "Munich", "Hamburg"];
+import { BRANCHES, describeCarBranches } from "../booking/branches.js";
+import { branchTimeInput, formatBranchTime, rentalPeriod } from "../booking/time.js";
+import { withSearch } from "../booking/bookingNavigation.js";
+import BookingAccountDialog from "../components/BookingAccountDialog.jsx";
+import { getSessionUser } from "../auth/session.js";
 
 export default function CarsPage() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const user = JSON.parse(localStorage.getItem("user") || "null");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const user = getSessionUser();
+  const [result, setResult] = useState(null);
+  const [bookingTarget, setBookingTarget] = useState("");
 
-  const [cars, setCars] = useState([]);
-  const [error, setError] = useState("");
-  const [infoMessage, setInfoMessage] = useState("");
-
+  const city = searchParams.get("city") || "";
+  const dropoffCity = searchParams.get("dropoffCity") || "";
+  const pickupDate = branchTimeInput(searchParams.get("pickupDate"));
+  const returnDate = branchTimeInput(searchParams.get("returnDate"));
   const [filters, setFilters] = useState({
-    city: searchParams.get("city") || "",
-    dropoffCity: searchParams.get("dropoffCity") || "",
-    pickupDate: searchParams.get("pickupDate") || "",
-    returnDate: searchParams.get("returnDate") || "",
-    category: "",
-    transmission: "",
-    fuel_type: "",
-    seats: "",
-    maxPrice: "",
+    category: "", transmission: "", fuel_type: "", seats: "", maxPrice: "",
   });
 
+  const query = useMemo(() => ({
+    pickup_datetime: pickupDate || undefined, return_datetime: returnDate || undefined,
+    pickup_branch: city || undefined, dropoff_branch: dropoffCity || undefined,
+  }), [city, dropoffCity, pickupDate, returnDate]);
+  const invalidDate = (searchParams.has("pickupDate") && !pickupDate) || (searchParams.has("returnDate") && !returnDate);
+  const dateError = invalidDate ? "Choose valid rental dates." :
+    pickupDate || returnDate ? rentalPeriod(pickupDate, returnDate).error : "";
+  const currentResult = result?.query === query ? result : null;
+  const loading = !dateError && !currentResult;
+  const error = dateError || currentResult?.error;
   useEffect(() => {
-    const loadCars = async () => {
-      try {
-        const { data } = await fetchAvailableCars();
-        setCars(data);
-      } catch {
-        setError("Failed to load available cars.");
-      }
-    };
-
-    loadCars();
-  }, []);
-
-  useEffect(() => {
-    if (error) {
-      const timer = setTimeout(() => {
-        setError("");
-      }, 3000);
-
-      return () => clearTimeout(timer);
-    }
-  }, [error]);
+    if (dateError) return;
+    let current = true;
+    fetchAvailableCars(query).then(({ data }) => {
+      if (current) setResult({ query, cars: data });
+    }).catch((err) => {
+      if (current) setResult({ query, error: err.response?.data?.message || "Failed to load available cars." });
+    });
+    return () => { current = false; };
+  }, [query, dateError]);
 
   function handleFilterChange(e) {
-    setFilters((prev) => ({
-      ...prev,
-      [e.target.name]: e.target.value,
-    }));
+    setFilters((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  }
+
+  function changeSearch(e) {
+    const next = new URLSearchParams(searchParams);
+    if (e.target.value) next.set(e.target.name, e.target.value);
+    else next.delete(e.target.name);
+    setSearchParams(next, { replace: true });
   }
 
   const filteredCars = useMemo(() => {
-    return cars.filter((car) => {
-      if (filters.city) {
-        const branchesText = (car.available_branches || "").toLowerCase();
-        if (!branchesText.includes(filters.city.toLowerCase())) return false;
-      }
-
+    return (currentResult?.cars || []).filter((car) => {
       if (filters.category && car.category !== filters.category) return false;
       if (filters.transmission && car.transmission !== filters.transmission) return false;
       if (filters.fuel_type && car.fuel_type !== filters.fuel_type) return false;
@@ -72,26 +67,16 @@ export default function CarsPage() {
 
       return true;
     });
-  }, [cars, filters]);
+  }, [currentResult, filters]);
 
   function handleBookNow(carId) {
-  if (!user) {
-    setInfoMessage("Please login or register to continue booking.");
-    return;
+    const target = withSearch(`/booking/${carId}`, searchParams);
+    if (user) navigate(target);
+    else setBookingTarget(target);
   }
 
-  const params = new URLSearchParams();
-
-  if (filters.city) params.set("city", filters.city);
-  if (filters.dropoffCity) params.set("dropoffCity", filters.dropoffCity);
-  if (filters.pickupDate) params.set("pickupDate", filters.pickupDate);
-  if (filters.returnDate) params.set("returnDate", filters.returnDate);
-
-  navigate(`/booking/${carId}?${params.toString()}`);
-}
-
   function handleViewDetails(carId) {
-    navigate(`/cars/${carId}`);
+    navigate(withSearch(`/cars/${carId}`, searchParams));
   }
 
   return (
@@ -109,30 +94,12 @@ export default function CarsPage() {
           <p className="mt-3 max-w-3xl text-gray-400">
             Browse premium vehicles, compare categories and prices, and choose the
             perfect car for your next trip.
-            {filters.city ? ` Showing results for ${filters.city}.` : ""}
+            {city ? ` Showing results for ${city}.` : ""}
           </p>
 
-          {(filters.pickupDate || filters.returnDate) && (
+          {pickupDate && returnDate && (
             <p className="mt-3 text-sm text-[#ff8a3d]">
-              {filters.pickupDate
-                ? `Pickup: ${new Date(filters.pickupDate).toLocaleDateString("en-GB")} ${new Date(
-                    filters.pickupDate
-                  ).toLocaleTimeString("en-GB", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                    hour12: false,
-                  })}`
-                : ""}
-              {filters.pickupDate && filters.returnDate ? " • " : ""}
-              {filters.returnDate
-                ? `Return: ${new Date(filters.returnDate).toLocaleDateString("en-GB")} ${new Date(
-                    filters.returnDate
-                  ).toLocaleTimeString("en-GB", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                    hour12: false,
-                  })}`
-                : ""}
+              Pickup: {formatBranchTime(pickupDate)} • Return: {formatBranchTime(returnDate)}
             </p>
           )}
         </div>
@@ -145,61 +112,28 @@ export default function CarsPage() {
           </div>
         )}
 
-        {infoMessage && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 px-4">
-            <div className="w-full max-w-md rounded-3xl border border-[#ff5f00]/30 bg-[#111] p-6 text-center shadow-2xl">
-              <h3 className="text-2xl font-bold text-white">Booking requires account</h3>
-              <p className="mt-3 text-gray-300">
-                Please login or register to continue booking.
-              </p>
-
-              <div className="mt-6 flex justify-center gap-3">
-                <Link
-                  to="/login"
-                  className="rounded-2xl border border-white/10 px-5 py-3 font-semibold text-white hover:border-white/30"
-                >
-                  Login
-                </Link>
-
-                <Link
-                  to="/register"
-                  className="rounded-2xl bg-[#ff5f00] px-5 py-3 font-bold text-white hover:bg-[#e55500]"
-                >
-                  Register
-                </Link>
-              </div>
-
-              <button
-                onClick={() => setInfoMessage("")}
-                className="mt-5 text-sm text-gray-400 hover:text-white"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        )}
+        {bookingTarget && <BookingAccountDialog target={bookingTarget} onClose={() => setBookingTarget("")} />}
 
         <div className="grid gap-8 lg:grid-cols-[280px_1fr]">
           <aside className="h-fit rounded-3xl border border-white/10 bg-[#111] p-5 shadow-xl">
             <h2 className="mb-5 text-2xl font-bold text-white">Filters</h2>
 
             <div className="space-y-4">
-              <div>
-                <label className="mb-2 block text-sm text-gray-400">City</label>
-                <select
-                  name="city"
-                  value={filters.city}
-                  onChange={handleFilterChange}
-                  className="w-full rounded-xl bg-[#222] p-3 text-white outline-none"
-                >
-                  <option value="">All cities</option>
-                  {CITY_OPTIONS.map((city) => (
-                    <option key={city} value={city}>
-                      {city}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {[["city", "Pickup branch", city], ["dropoffCity", "Return branch", dropoffCity]].map(([name, label, value]) => (
+                <div key={name}>
+                  <label htmlFor={name} className="mb-2 block text-sm text-gray-400">{label}</label>
+                  <select id={name} name={name} value={value} onChange={changeSearch} className="w-full rounded-xl bg-[#222] p-3 text-white">
+                    <option value="">All branches</option>
+                    {BRANCHES.map((branch) => <option key={branch}>{branch}</option>)}
+                  </select>
+                </div>
+              ))}
+              {[["pickupDate", "Pickup (Berlin)", pickupDate], ["returnDate", "Return (Berlin)", returnDate]].map(([name, label, value]) => (
+                <div key={name}>
+                  <label htmlFor={name} className="mb-2 block text-sm text-gray-400">{label}</label>
+                  <input id={name} name={name} type="datetime-local" value={value} onChange={changeSearch} className="w-full rounded-xl bg-[#222] p-3 text-white [color-scheme:dark]" />
+                </div>
+              ))}
 
               <div>
                 <label className="mb-2 block text-sm text-gray-400">Category</label>
@@ -280,7 +214,7 @@ export default function CarsPage() {
           </aside>
 
           <div className="grid gap-6 md:grid-cols-2">
-            {filteredCars.length === 0 ? (
+            {loading ? <p>Loading available cars…</p> : error ? null : filteredCars.length === 0 ? (
               <div className="col-span-full rounded-3xl border border-white/10 bg-[#111] p-8 text-center text-gray-400">
                 No cars match the current filters.
               </div>
@@ -352,13 +286,13 @@ export default function CarsPage() {
                       {car.description
                         ? car.description.slice(0, 140) +
                           (car.description.length > 140 ? "..." : "")
-                        : "Premium comfort, clean interior, reliable performance, and excellent daily rental value."}
+                        : ""}
                     </p>
 
                     <div className="rounded-2xl bg-[#222] p-3">
                       <p className="text-xs text-gray-500">Available in branches</p>
                       <p className="mt-1 text-sm text-gray-300">
-                        {car.available_branches || "Erfurt, Berlin, Frankfurt, Munich, Hamburg"}
+                        {describeCarBranches(car.available_branches)}
                       </p>
                     </div>
 

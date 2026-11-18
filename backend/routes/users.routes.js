@@ -2,6 +2,7 @@ const express = require("express");
 const pool = require("../db");
 const auth = require("../middleware/auth.middleware");
 const allowRoles = require("../middleware/role.middleware");
+const enabledStatuses = require("../account-status");
 
 const router = express.Router();
 
@@ -47,8 +48,7 @@ router.get("/", auth, allowRoles("admin"), async (req, res) => {
 
     res.json(result.rows);
   } catch (err) {
-    console.error("USERS LIST ERROR:", err);
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: "Failed to load users" });
   }
 });
 
@@ -101,8 +101,7 @@ router.put("/profile", auth, async (req, res) => {
       user: result.rows[0],
     });
   } catch (err) {
-    console.error("PROFILE UPDATE ERROR:", err);
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: "Failed to update profile" });
   }
 });
 
@@ -112,25 +111,59 @@ router.put("/profile", auth, async (req, res) => {
  * @access  Protected (Admin only)
  */
 router.delete("/:id", auth, allowRoles("admin"), async (req, res) => {
+  const { id } = req.params;
+  if (!/^\d{1,19}$/.test(id) || BigInt(id) > 9223372036854775807n) {
+    return res.status(400).json({ message: "Invalid user ID" });
+  }
+  let client;
   try {
-    const { id } = req.params;
-
-    const result = await pool.query(
-      "DELETE FROM users WHERE id = $1 RETURNING *",
-      [id]
+    client = await pool.connect();
+    await client.query("BEGIN");
+    // Lock administrators in the same order so simultaneous deletes retain an active administrator.
+    const { rows } = await client.query(
+      `SELECT id, id = $1 AS target,
+              (role = 'admin' AND LOWER(TRIM(account_status)) = ANY($2::text[])) AS active_admin
+       FROM users WHERE id = $1 OR role = 'admin'
+       ORDER BY id FOR UPDATE`,
+      [id, enabledStatuses]
     );
-
-    if (result.rows.length === 0) {
+    const admins = rows.filter((row) => row.active_admin);
+    if (!admins.some((row) => String(row.id) === String(req.user.id))) {
+      await client.query("ROLLBACK");
+      return res.status(403).json({ message: "Administrator access required" });
+    }
+    const target = rows.find((row) => row.target);
+    if (!target) {
+      await client.query("ROLLBACK");
       return res.status(404).json({ message: "User not found" });
     }
-
-    res.json({
-      message: "User deleted successfully ✅",
-      user: result.rows[0],
-    });
+    if (target.active_admin && admins.length === 1) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ message: "At least one active administrator is required" });
+    }
+    const bookings = await client.query("SELECT 1 FROM bookings WHERE user_id = $1 LIMIT 1", [id]);
+    if (bookings.rowCount) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ message: "Users with booking history cannot be deleted" });
+    }
+    await client.query("DELETE FROM users WHERE id = $1", [id]);
+    await client.query("COMMIT");
+    return res.json({ message: "User deleted successfully", user: { id: target.id } });
   } catch (err) {
-    console.error("USER DELETE ERROR:", err);
-    res.status(500).json({ message: err.message });
+    if (client) {
+      try {
+        await client.query("ROLLBACK");
+      } catch {
+        client.release(true);
+        client = null;
+      }
+    }
+    if (err.code === "23503") {
+      return res.status(409).json({ message: "User is still referenced by other records" });
+    }
+    return res.status(500).json({ message: "Failed to delete user" });
+  } finally {
+    client?.release();
   }
 });
 

@@ -1,94 +1,39 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+import { fetchAvailableCars } from "../../api/api.js";
 import FeaturedCars from "./FeaturedCars.jsx";
 
-describe("FeaturedCars Component", () => {
-  it("renders section heading", () => {
-    render(
-      <MemoryRouter>
-        <FeaturedCars />
-      </MemoryRouter>
-    );
+vi.mock("../../api/api.js", () => ({ fetchAvailableCars: vi.fn() }));
+afterEach(() => vi.clearAllMocks());
 
-    expect(screen.getByText(/Featured Fleet/i)).toBeInTheDocument();
-    expect(screen.getByText(/Popular cars for rent/i)).toBeInTheDocument();
-  });
+function renderFleet() {
+  render(<MemoryRouter><FeaturedCars /></MemoryRouter>);
+}
 
-  it("renders view all cars link", () => {
-    render(
-      <MemoryRouter>
-        <FeaturedCars />
-      </MemoryRouter>
-    );
-
-    expect(screen.getByRole("link", { name: /View all cars/i })).toBeInTheDocument();
-  });
-
-  it("renders featured car names", () => {
-    render(
-      <MemoryRouter>
-        <FeaturedCars />
-      </MemoryRouter>
-    );
-
-    expect(screen.getByText(/BMW X5/i)).toBeInTheDocument();
-    expect(screen.getByText(/Mercedes-Benz CLE/i)).toBeInTheDocument();
-    expect(screen.getByText(/Audi A6 E-Tron/i)).toBeInTheDocument();
-  });
-
-  it("renders premium badges", () => {
-  render(
-    <MemoryRouter>
-      <FeaturedCars />
-    </MemoryRouter>
-  );
-
-  expect(screen.getAllByText(/Premium/i).length).toBeGreaterThanOrEqual(3);
+it("uses inventory IDs, prices and images for at most three featured cars", async () => {
+  const inventory = ["A", "B", "C", "D"].map((model, i) => ({
+    id: 80 + i, brand: "Example", model, daily_price: "47.50", image_url: "/test-image.png",
+  }));
+  fetchAvailableCars.mockResolvedValue({ data: inventory });
+  renderFleet();
+  expect(await screen.findByRole("heading", { name: "Example A" })).toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "Example D" })).toBeNull();
+  expect(screen.getAllByRole("link", { name: "Details" })[0]).toHaveAttribute("href", "/cars/80");
+  expect(screen.getAllByRole("link", { name: "Book" })[0]).toHaveAttribute("href", "/booking/80");
+  expect(screen.getAllByText(/€47.50/)).toHaveLength(3);
+  expect(screen.getByRole("img", { name: "Example A" })).toHaveAttribute("src", "/test-image.png");
 });
 
-  it("renders car prices", () => {
-    render(
-      <MemoryRouter>
-        <FeaturedCars />
-      </MemoryRouter>
-    );
+it("renders an empty inventory without fictional cars", async () => {
+  fetchAvailableCars.mockResolvedValue({ data: [] });
+  renderFleet();
+  expect(await screen.findByText("No cars are available right now.")).toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: "Book" })).toBeNull();
+});
 
-    expect(screen.getByText(/€310/i)).toBeInTheDocument();
-    expect(screen.getByText(/€280/i)).toBeInTheDocument();
-    expect(screen.getByText(/€260/i)).toBeInTheDocument();
-  });
-
-  it("renders detail and book links for all cars", () => {
-    render(
-      <MemoryRouter>
-        <FeaturedCars />
-      </MemoryRouter>
-    );
-
-    expect(screen.getAllByRole("link", { name: /Details/i }).length).toBe(3);
-    expect(screen.getAllByRole("link", { name: /Book/i }).length).toBe(3);
-  });
-
-  it("renders rating text", () => {
-    render(
-      <MemoryRouter>
-        <FeaturedCars />
-      </MemoryRouter>
-    );
-
-    expect(screen.getAllByText(/5.0/i).length).toBe(3);
-  });
-
-  it("renders car images with alt text", () => {
-    render(
-      <MemoryRouter>
-        <FeaturedCars />
-      </MemoryRouter>
-    );
-
-    expect(screen.getByAltText(/BMW X5/i)).toBeInTheDocument();
-    expect(screen.getByAltText(/Mercedes-Benz CLE/i)).toBeInTheDocument();
-    expect(screen.getByAltText(/Audi A6 E-Tron/i)).toBeInTheDocument();
-  });
+it("reports an inventory failure", async () => {
+  fetchAvailableCars.mockRejectedValue(new Error("offline"));
+  renderFleet();
+  expect(await screen.findByRole("alert")).toHaveTextContent("Featured cars could not be loaded.");
 });

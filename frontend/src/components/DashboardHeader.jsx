@@ -1,3 +1,4 @@
+import { dashboardPath, getSessionUser, clearSession } from "../auth/session.js";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Home,
@@ -11,11 +12,10 @@ import BrandLogo from "./BrandLogo.jsx";
 
 export default function DashboardHeader({ title }) {
   const navigate = useNavigate();
-  const user = JSON.parse(localStorage.getItem("user") || "null");
+  const user = getSessionUser();
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
+    clearSession();
     navigate("/login");
   };
 
@@ -26,11 +26,6 @@ export default function DashboardHeader({ title }) {
       ? "Staff"
       : "Customer";
 
-  const getDashboardPath = () => {
-    if (user?.role === "admin") return "/admin-dashboard";
-    if (user?.role === "staff") return "/staff-dashboard";
-    return "/customer-dashboard";
-  };
 
   return (
     <div className="mb-8 rounded-2xl border border-white/10 bg-[#111] px-6 py-4 shadow-lg">
@@ -106,12 +101,17 @@ export default function DashboardHeader({ title }) {
           )}
 
           <Link
-            to={getDashboardPath()}
+            to={dashboardPath(user?.role)}
             className="flex items-center gap-2 rounded-lg border border-gray-700 px-4 py-2 text-sm font-medium text-white hover:border-gray-500"
           >
             <LayoutDashboard size={16} />
             Dashboard
           </Link>
+          {["staff", "admin"].includes(user?.role) && (
+            <Link to="/messages" className="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold">
+              Contact messages
+            </Link>
+          )}
 
           <button
             onClick={handleLogout}

@@ -1,15 +1,13 @@
-import { Link } from "react-router-dom";
-import { CarFront, Mail, Phone, MapPin, Instagram, Facebook, ShieldCheck } from "lucide-react";
+import { dashboardPath, getSessionUser } from "../../auth/session.js";
+import { bookingAuthLink, getBookingReturnTo } from "../../booking/bookingNavigation.js";
+import { useSearchParams, Link } from "react-router-dom";
+import { CarFront, MessageSquareMore, MapPin, Instagram, Facebook, ShieldCheck } from "lucide-react";
 
 export default function Footer() {
-  const user = JSON.parse(localStorage.getItem("user") || "null");
+  const user = getSessionUser();
+  const [params] = useSearchParams();
+  const returnTo = getBookingReturnTo(params);
 
-  function getDashboardPath() {
-    if (!user) return "/login";
-    if (user.role === "admin") return "/admin-dashboard";
-    if (user.role === "staff") return "/staff-dashboard";
-    return "/customer-dashboard";
-  }
 
   return (
     <footer className="mt-16 border-t border-white/10 bg-gradient-to-b from-[#0a0a0a] to-black">
@@ -71,7 +69,7 @@ export default function Footer() {
             <div className="mt-5 space-y-3 text-sm text-gray-400">
               {user ? (
                 <>
-                  <Link to={getDashboardPath()} className="block transition hover:text-white">
+                  <Link to={dashboardPath(user?.role)} className="block transition hover:text-white">
                     Dashboard
                   </Link>
                   {user.role === "customer" && (
@@ -92,10 +90,10 @@ export default function Footer() {
                 </>
               ) : (
                 <>
-                  <Link to="/login" className="block transition hover:text-white">
+                  <Link to={returnTo ? bookingAuthLink("/login", returnTo) : "/login"} className="block transition hover:text-white">
                     Login
                   </Link>
-                  <Link to="/register" className="block transition hover:text-white">
+                  <Link to={returnTo ? bookingAuthLink("/register", returnTo) : "/register"} className="block transition hover:text-white">
                     Register
                   </Link>
                 </>
@@ -107,13 +105,8 @@ export default function Footer() {
             <h3 className="text-lg font-bold text-white">Contact</h3>
             <div className="mt-5 space-y-4 text-sm text-gray-400">
               <div className="flex items-start gap-3">
-                <Mail size={18} className="mt-0.5 text-[#ff5f00]" />
-                <span>support@autoluxe-rental.com</span>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <Phone size={18} className="mt-0.5 text-[#ff5f00]" />
-                <span>+49 157 0000 0000</span>
+                <MessageSquareMore size={18} className="mt-0.5 text-[#ff5f00]" />
+                <a href="/contact#contact-name" className="transition hover:text-white">Message the rental office</a>
               </div>
 
               <div className="flex items-start gap-3">

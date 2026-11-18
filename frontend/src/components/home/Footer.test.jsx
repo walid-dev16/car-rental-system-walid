@@ -61,7 +61,7 @@ describe("Footer Component", () => {
     );
 
     expect(screen.getByText(/Erfurt, Germany/i)).toBeInTheDocument();
-    expect(screen.getByText(/\+49 157 0000 0000/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Message the rental office" })).toHaveAttribute("href", "/contact#contact-name");
   });
 
   it("shows login and register links when user is not logged in", () => {

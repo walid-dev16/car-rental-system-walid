@@ -1,3 +1,5 @@
+import { formatBranchTime } from "../booking/time.js";
+import { bookingCounts, bookingStatusStyle } from "../booking/status.js";
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../api/api.js";
@@ -39,15 +41,14 @@ export default function StaffDashboard() {
   }, []);
 
   useEffect(() => {
-    if (success || error) {
+    if (success) {
       const timer = setTimeout(() => {
         setSuccess("");
-        setError("");
       }, 4000);
 
       return () => clearTimeout(timer);
     }
-  }, [success, error]);
+  }, [success]);
 
   const handleComplete = async (id) => {
     setError("");
@@ -75,14 +76,7 @@ export default function StaffDashboard() {
     }
   };
 
-  const stats = useMemo(() => {
-    return {
-      total: bookings.length,
-      pending: bookings.filter((b) => b.status === "pending").length,
-      booked: bookings.filter((b) => b.status === "booked").length,
-      cancelled: bookings.filter((b) => b.status === "cancelled").length,
-    };
-  }, [bookings]);
+  const stats = useMemo(() => bookingCounts(bookings), [bookings]);
 
   const pendingBookings = useMemo(() => {
     return bookings.filter((b) => b.status === "pending");
@@ -91,33 +85,6 @@ export default function StaffDashboard() {
   const recentBookings = useMemo(() => {
     return bookings.slice(0, 6);
   }, [bookings]);
-
-  const getStatusStyle = (status) => {
-    if (status === "booked") {
-      return "border-green-500/30 bg-green-500/10 text-green-400";
-    }
-    if (status === "cancelled") {
-      return "border-red-500/30 bg-red-500/10 text-red-400";
-    }
-    if (status === "pending") {
-      return "border-yellow-500/30 bg-yellow-500/10 text-yellow-400";
-    }
-    return "border-white/10 bg-white/5 text-gray-300";
-  };
-
-  const formatDateTime = (value) => {
-    if (!value) return "N/A";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return value;
-
-    return date.toLocaleString("en-GB", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
 
   return (
     <div className="min-h-screen bg-black p-8 text-white">
@@ -254,7 +221,7 @@ export default function StaffDashboard() {
                           </div>
 
                           <span
-                            className={`inline-flex rounded-full border px-4 py-2 text-sm font-semibold ${getStatusStyle(
+                            className={`inline-flex rounded-full border px-4 py-2 text-sm font-semibold ${bookingStatusStyle(
                               booking.status
                             )}`}
                           >
@@ -282,10 +249,10 @@ export default function StaffDashboard() {
                               Booking Time
                             </p>
                             <p className="mt-3 text-sm text-white">
-                              Pickup: {formatDateTime(booking.pickup_datetime)}
+                              Pickup: {formatBranchTime(booking.pickup_datetime)} · {booking.pickup_branch || "Branch to be arranged"}
                             </p>
                             <p className="mt-1 text-sm text-white">
-                              Return: {formatDateTime(booking.return_datetime)}
+                              Return: {formatBranchTime(booking.return_datetime)} · {booking.dropoff_branch || "Branch to be arranged"}
                             </p>
                           </div>
 
@@ -386,7 +353,7 @@ export default function StaffDashboard() {
                     </div>
 
                     <span
-                      className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${getStatusStyle(
+                      className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${bookingStatusStyle(
                         booking.status
                       )}`}
                     >
@@ -412,19 +379,19 @@ export default function StaffDashboard() {
                     <div className="rounded-2xl bg-black/30 p-4">
                       <p className="text-xs text-gray-500">Pickup</p>
                       <p className="mt-2 text-sm text-white">
-                        {formatDateTime(booking.pickup_datetime)}
+                        {formatBranchTime(booking.pickup_datetime)} · {booking.pickup_branch || "Branch to be arranged"}
                       </p>
                     </div>
 
                     <div className="rounded-2xl bg-black/30 p-4">
                       <p className="text-xs text-gray-500">Return</p>
                       <p className="mt-2 text-sm text-white">
-                        {formatDateTime(booking.return_datetime)}
+                        {formatBranchTime(booking.return_datetime)} · {booking.dropoff_branch || "Branch to be arranged"}
                       </p>
                     </div>
                   </div>
 
-                  {!["booked", "cancelled"].includes(booking.status) && (
+                  {booking.status === "pending" && (
                     <div className="flex gap-3">
                       <button
                         onClick={() => handleComplete(booking.id)}

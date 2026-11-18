@@ -1,47 +1,49 @@
 import React, { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import API from "../api/api.js";
 import Navbar from "../components/home/Navbar.jsx";
 import Footer from "../components/home/Footer.jsx";
 
+import { describeCarBranches } from "../booking/branches.js";
+import { withSearch } from "../booking/bookingNavigation.js";
+import BookingAccountDialog from "../components/BookingAccountDialog.jsx";
+import { getSessionUser } from "../auth/session.js";
+
 export default function CarDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const user = JSON.parse(localStorage.getItem("user") || "null");
+  const [params] = useSearchParams();
+  const user = getSessionUser();
+  const target = withSearch(`/booking/${id}`, params);
+  const pickup = params.get("pickupDate");
+  const dropoff = params.get("returnDate");
 
   const [car, setCar] = useState(null);
   const [error, setError] = useState("");
-  const [infoMessage, setInfoMessage] = useState("");
+  const [showLogin, setShowLogin] = useState(false);
   const [openSection, setOpenSection] = useState({
     technical: true,
     safety: false,
     performance: false,
   });
 
-  /* Load selected car details when route id changes */
   useEffect(() => {
-    const loadCar = async () => {
+    let current = true;
+    async function loadCar() {
+      setCar(null);
+      setError("");
       try {
-        const { data } = await API.get(`/cars/${id}`);
-        setCar(data);
-      } catch {
-        setError("Failed to load car details.");
+        const { data } = await API.get(`/cars/${id}`, {
+          params: { pickup_datetime: pickup || undefined, return_datetime: dropoff || undefined },
+        });
+        if (current) setCar(data);
+      } catch (err) {
+        if (current) setError(err.response?.data?.message || "Failed to load car details.");
       }
-    };
-
-    loadCar();
-  }, [id]);
-
-  /* Auto-clear error message after a short delay */
-  useEffect(() => {
-    if (error) {
-      const timer = setTimeout(() => {
-        setError("");
-      }, 3000);
-
-      return () => clearTimeout(timer);
     }
-  }, [error]);
+    loadCar();
+    return () => { current = false; };
+  }, [id, pickup, dropoff]);
 
   function toggleSection(section) {
     setOpenSection((prev) => ({
@@ -53,11 +55,11 @@ export default function CarDetailsPage() {
   /* Require login before continuing to the booking page */
   function handleBookNow() {
     if (!user) {
-      setInfoMessage("Please login or register to continue booking.");
+      setShowLogin(true);
       return;
     }
 
-    navigate(`/booking/${id}`);
+    navigate(target);
   }
 
   if (!car) {
@@ -78,39 +80,7 @@ export default function CarDetailsPage() {
     <div className="min-h-screen bg-black text-white">
       <Navbar />
 
-      {infoMessage && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 px-4">
-          <div className="w-full max-w-md rounded-3xl border border-[#ff5f00]/30 bg-[#111] p-6 text-center shadow-2xl">
-            <h3 className="text-2xl font-bold text-white">Booking requires account</h3>
-            <p className="mt-3 text-gray-300">
-              Please login or register to continue booking.
-            </p>
-
-            <div className="mt-6 flex justify-center gap-3">
-              <Link
-                to="/login"
-                className="rounded-2xl border border-white/10 px-5 py-3 font-semibold text-white hover:border-white/30"
-              >
-                Login
-              </Link>
-
-              <Link
-                to="/register"
-                className="rounded-2xl bg-[#ff5f00] px-5 py-3 font-bold text-white hover:bg-[#e55500]"
-              >
-                Register
-              </Link>
-            </div>
-
-            <button
-              onClick={() => setInfoMessage("")}
-              className="mt-5 text-sm text-gray-400 hover:text-white"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
+      {showLogin && <BookingAccountDialog target={target} onClose={() => setShowLogin(false)} />}
 
       <section className="mx-auto max-w-[1500px] px-6 py-10">
         {error && (
@@ -121,7 +91,7 @@ export default function CarDetailsPage() {
 
         <div className="mb-6">
           <Link
-            to="/cars"
+            to={withSearch("/cars", params)}
             className="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-white hover:border-white/30"
           >
             ← Back to Cars
@@ -180,14 +150,14 @@ export default function CarDetailsPage() {
                 <h3 className="text-lg font-bold text-white">Description</h3>
                 <p className="mt-3 text-sm leading-7 text-gray-300">
                   {car.description ||
-                    "Premium rental vehicle with elegant design, modern comfort, and reliable performance for city and long-distance trips."}
+                    "No description provided."}
                 </p>
               </div>
 
               <div className="mt-4 rounded-3xl bg-[#222] p-5">
                 <h3 className="text-lg font-bold text-white">Available in branches</h3>
                 <p className="mt-3 text-sm leading-7 text-gray-300">
-                  {car.available_branches || "Erfurt, Berlin, Frankfurt, Munich, Hamburg"}
+                  {describeCarBranches(car.available_branches)}
                 </p>
               </div>
 
@@ -202,6 +172,7 @@ export default function CarDetailsPage() {
 
                 <button
                   onClick={handleBookNow}
+                  disabled={car.operational_status === "maintenance" || car.status === "maintenance"}
                   className="rounded-2xl bg-[#ff5f00] px-8 py-4 font-bold text-white hover:bg-[#e55500]"
                 >
                   Book Now
@@ -228,7 +199,7 @@ export default function CarDetailsPage() {
                   {openSection.technical && (
                     <div className="px-5 pb-5 text-sm leading-7 text-gray-300">
                       {car.technical_specifications ||
-                        "Modern infotainment system, navigation, Bluetooth connectivity, smart driving controls and premium comfort features for everyday use."}
+                        "Technical specifications have not been provided."}
                     </div>
                   )}
                 </div>
@@ -246,7 +217,7 @@ export default function CarDetailsPage() {
                   {openSection.safety && (
                     <div className="px-5 pb-5 text-sm leading-7 text-gray-300">
                       {car.safety_features ||
-                        "Advanced safety systems including parking sensors, airbags, stability control, braking support and reliable road handling."}
+                        "Safety features have not been provided."}
                     </div>
                   )}
                 </div>
@@ -264,7 +235,7 @@ export default function CarDetailsPage() {
                   {openSection.performance && (
                     <div className="px-5 pb-5 text-sm leading-7 text-gray-300">
                       {car.performance_info ||
-                        "Smooth acceleration, strong engine response, stable highway performance and efficient power delivery for a premium driving experience."}
+                        "Performance details have not been provided."}
                     </div>
                   )}
                 </div>

@@ -1,7 +1,6 @@
-import React from "react";
+import React, { useState } from "react";
+import API from "../api/api.js";
 import {
-  Mail,
-  Phone,
   MapPin,
   Clock3,
   MessageSquareMore,
@@ -10,6 +9,26 @@ import Navbar from "../components/home/Navbar.jsx";
 import Footer from "../components/home/Footer.jsx";
 
 export default function ContactPage() {
+  const [sending, setSending] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+
+  async function sendMessage(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    setSending(true);
+    setNotice("");
+    setError("");
+    try {
+      const { data } = await API.post("/contact", Object.fromEntries(new FormData(form)));
+      setNotice(data.message);
+      form.reset();
+    } catch (err) {
+      setError(err.response?.data?.message || "We could not save your message. Please try again.");
+    } finally {
+      setSending(false);
+    }
+  }
   return (
     <div className="min-h-screen bg-black text-white">
       <Navbar />
@@ -39,25 +58,27 @@ export default function ContactPage() {
               </p>
             </div>
 
-            <form className="grid gap-5">
+            <form className="grid gap-5" onSubmit={sendMessage}>
               <div className="grid gap-5 md:grid-cols-2">
                 <div>
-                  <label className="mb-2 block text-sm text-gray-400">
+                  <label htmlFor="contact-name" className="mb-2 block text-sm text-gray-400">
                     Full Name
                   </label>
                   <input
                     type="text"
+                    id="contact-name" name="sender_name" autoComplete="name" maxLength={100} required
                     placeholder="Your full name"
                     className="w-full rounded-2xl border border-white/10 bg-[#1b1b1b] px-4 py-3 text-white outline-none placeholder:text-gray-500"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm text-gray-400">
+                  <label htmlFor="contact-email" className="mb-2 block text-sm text-gray-400">
                     Email Address
                   </label>
                   <input
                     type="email"
+                    id="contact-email" name="email" autoComplete="email" maxLength={254} required
                     placeholder="you@example.com"
                     className="w-full rounded-2xl border border-white/10 bg-[#1b1b1b] px-4 py-3 text-white outline-none placeholder:text-gray-500"
                   />
@@ -65,34 +86,38 @@ export default function ContactPage() {
               </div>
 
               <div>
-                <label className="mb-2 block text-sm text-gray-400">
+                <label htmlFor="contact-subject" className="mb-2 block text-sm text-gray-400">
                   Subject
                 </label>
                 <input
                   type="text"
                   placeholder="How can we help?"
+                  id="contact-subject" name="subject" maxLength={150} required
                   className="w-full rounded-2xl border border-white/10 bg-[#1b1b1b] px-4 py-3 text-white outline-none placeholder:text-gray-500"
                 />
               </div>
 
               <div>
-                <label className="mb-2 block text-sm text-gray-400">
+                <label htmlFor="contact-message" className="mb-2 block text-sm text-gray-400">
                   Message
                 </label>
                 <textarea
                   rows="6"
+                  id="contact-message" name="message" maxLength={4000} required
                   placeholder="Write your message here..."
                   className="w-full rounded-2xl border border-white/10 bg-[#1b1b1b] px-4 py-3 text-white outline-none placeholder:text-gray-500"
                 />
               </div>
 
               <button
-                type="button"
+                type="submit" disabled={sending}
                 className="inline-flex w-fit items-center gap-2 rounded-2xl bg-[#ff5f00] px-6 py-3 font-bold text-white transition hover:scale-[1.02] hover:bg-[#e55500]"
               >
                 <MessageSquareMore size={18} />
-                Send Message
+                {sending ? "Sending…" : "Send Message"}
               </button>
+              {notice && <p role="status" className="text-green-300">{notice}</p>}
+              {error && <p role="alert" className="text-red-300">{error}</p>}
             </form>
           </div>
 
@@ -105,25 +130,13 @@ export default function ContactPage() {
               <div className="space-y-4">
                 <div className="flex items-start gap-4 rounded-2xl bg-black/30 p-4">
                   <div className="rounded-2xl bg-[#ff5f00]/10 p-3 text-[#ff8a3d]">
-                    <Mail size={20} />
+                    <MessageSquareMore size={20} />
                   </div>
                   <div>
-                    <p className="font-semibold text-white">Email</p>
-                    <p className="mt-1 text-sm text-gray-400">
-                      support@autoluxe.com
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-4 rounded-2xl bg-black/30 p-4">
-                  <div className="rounded-2xl bg-[#ff5f00]/10 p-3 text-[#ff8a3d]">
-                    <Phone size={20} />
-                  </div>
-                  <div>
-                    <p className="font-semibold text-white">Phone</p>
-                    <p className="mt-1 text-sm text-gray-400">
-                      +49 123 456 7890
-                    </p>
+                    <p className="font-semibold text-white">Rental office</p>
+                    <a href="#contact-name" className="mt-1 inline-block text-sm text-[#ff8a3d] underline">
+                      Open the message form
+                    </a>
                   </div>
                 </div>
 

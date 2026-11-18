@@ -1,3 +1,5 @@
+import { formatBranchTime } from "../booking/time.js";
+import { bookingStatusStyle } from "../booking/status.js";
 import React, { useEffect, useState } from "react";
 import { fetchMyBookings } from "../api/api.js";
 import Navbar from "../components/home/Navbar.jsx";
@@ -22,33 +24,6 @@ export default function MyBookingsPage() {
 
     loadMyBookings();
   }, []);
-
-  const getStatusStyle = (status) => {
-    if (status === "booked") {
-      return "border-green-500/30 bg-green-500/10 text-green-400";
-    }
-    if (status === "cancelled") {
-      return "border-red-500/30 bg-red-500/10 text-red-400";
-    }
-    if (status === "pending") {
-      return "border-yellow-500/30 bg-yellow-500/10 text-yellow-400";
-    }
-    return "border-white/10 bg-white/5 text-gray-300";
-  };
-
-  const formatDateTime = (value) => {
-    if (!value) return "N/A";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return value;
-
-    return date.toLocaleString("en-GB", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -122,7 +97,7 @@ export default function MyBookingsPage() {
                         </div>
 
                         <span
-                          className={`inline-flex rounded-full border px-4 py-2 text-sm font-semibold ${getStatusStyle(
+                          className={`inline-flex rounded-full border px-4 py-2 text-sm font-semibold ${bookingStatusStyle(
                             booking.status
                           )}`}
                         >
@@ -136,7 +111,7 @@ export default function MyBookingsPage() {
                             Pick-up
                           </p>
                           <p className="mt-3 text-sm text-white">
-                            {formatDateTime(booking.pickup_datetime)}
+                            {formatBranchTime(booking.pickup_datetime)} · {booking.pickup_branch || "Branch to be arranged"}
                           </p>
                         </div>
 
@@ -145,7 +120,7 @@ export default function MyBookingsPage() {
                             Return
                           </p>
                           <p className="mt-3 text-sm text-white">
-                            {formatDateTime(booking.return_datetime)}
+                            {formatBranchTime(booking.return_datetime)} · {booking.dropoff_branch || "Branch to be arranged"}
                           </p>
                         </div>
 

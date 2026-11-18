@@ -1,7 +1,6 @@
-DROP TABLE IF EXISTS bookings CASCADE;
-DROP TABLE IF EXISTS cars CASCADE;
-DROP TABLE IF EXISTS users CASCADE;
-CREATE TABLE users (
+-- Bootstrap a fresh database. Existing data is preserved.
+BEGIN;
+CREATE TABLE IF NOT EXISTS users (
   id BIGSERIAL PRIMARY KEY,
 
   first_name VARCHAR(50) NOT NULL,
@@ -29,7 +28,7 @@ CREATE TABLE users (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-CREATE TABLE cars (
+CREATE TABLE IF NOT EXISTS cars (
   id BIGSERIAL PRIMARY KEY,
 
   brand VARCHAR(50) NOT NULL,
@@ -47,19 +46,28 @@ CREATE TABLE cars (
   daily_price NUMERIC(10,2) NOT NULL,
 
   status VARCHAR(20) NOT NULL DEFAULT 'available',
+  status_from_booking BOOLEAN NOT NULL DEFAULT FALSE,
   image_url TEXT,
+  description TEXT,
+  available_branches TEXT,
+  technical_specifications TEXT,
+  safety_features TEXT,
+  performance_info TEXT,
+  doors INT,
 
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-CREATE TABLE bookings (
+CREATE TABLE IF NOT EXISTS bookings (
   id BIGSERIAL PRIMARY KEY,
 
-  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  car_id BIGINT NOT NULL REFERENCES cars(id) ON DELETE CASCADE,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  car_id BIGINT NOT NULL REFERENCES cars(id) ON DELETE RESTRICT,
 
   pickup_datetime TIMESTAMP NOT NULL,
   return_datetime TIMESTAMP NOT NULL,
+  pickup_branch VARCHAR(50),
+  dropoff_branch VARCHAR(50),
 
   total_price NUMERIC(10,2) NOT NULL,
   extra_fee NUMERIC(10,2) DEFAULT 0,
@@ -73,3 +81,13 @@ CREATE TABLE bookings (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+CREATE INDEX IF NOT EXISTS bookings_car_period_idx ON bookings (car_id, return_datetime, pickup_datetime);
+CREATE TABLE IF NOT EXISTS public.contact_messages (
+  id BIGSERIAL PRIMARY KEY,
+  sender_name VARCHAR(100) NOT NULL,
+  email VARCHAR(254) NOT NULL,
+  subject VARCHAR(150) NOT NULL,
+  message TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+COMMIT;

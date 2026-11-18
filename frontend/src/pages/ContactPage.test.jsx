@@ -1,6 +1,24 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
+import API from "../api/api.js";
 import ContactPage from "./ContactPage.jsx";
+
+vi.mock("../api/api.js", () => ({ default: { post: vi.fn() } }));
+
+const inquiry = {
+  sender_name: "Sample Guest",
+  email: "guest@example.test",
+  subject: "Pickup time",
+  message: "Can I collect the car at 10 am?",
+};
+
+function sendInquiry() {
+  fireEvent.change(screen.getByLabelText("Full Name"), { target: { value: inquiry.sender_name } });
+  fireEvent.change(screen.getByLabelText("Email Address"), { target: { value: inquiry.email } });
+  fireEvent.change(screen.getByLabelText("Subject"), { target: { value: inquiry.subject } });
+  fireEvent.change(screen.getByLabelText("Message"), { target: { value: inquiry.message } });
+  fireEvent.click(screen.getByRole("button", { name: "Send Message" }));
+}
 
 vi.mock("../components/home/Navbar.jsx", () => ({
   default: () => <div>Navbar Section</div>,
@@ -47,9 +65,32 @@ describe("ContactPage", () => {
     render(<ContactPage />);
 
     expect(screen.getByText(/Contact Information/i)).toBeInTheDocument();
-    expect(screen.getByText(/support@autoluxe.com/i)).toBeInTheDocument();
-    expect(screen.getByText(/\+49 123 456 7890/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open the message form" })).toHaveAttribute("href", "#contact-name");
+    expect(screen.getByLabelText("Full Name")).toHaveAttribute("id", "contact-name");
     expect(screen.getAllByText(/Erfurt, Germany/i).length).toBeGreaterThan(0);
+  });
+
+  it("clears the form only after the office inbox accepts a message", async () => {
+    API.post.mockResolvedValueOnce({ data: { message: "Message received." } });
+    render(<ContactPage />);
+    sendInquiry();
+    expect(await screen.findByRole("status")).toHaveTextContent("Message received.");
+    expect(API.post).toHaveBeenCalledWith("/contact", inquiry);
+    for (const field of ["Full Name", "Email Address", "Subject", "Message"]) {
+      expect(screen.getByLabelText(field)).toHaveValue("");
+    }
+  });
+
+  it("keeps the complete message available to retry when submission fails", async () => {
+    API.post.mockRejectedValueOnce(new Error("offline"));
+    render(<ContactPage />);
+    sendInquiry();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Please try again");
+    expect(screen.getByLabelText("Full Name")).toHaveValue(inquiry.sender_name);
+    expect(screen.getByLabelText("Email Address")).toHaveValue(inquiry.email);
+    expect(screen.getByLabelText("Subject")).toHaveValue(inquiry.subject);
+    expect(screen.getByLabelText("Message")).toHaveValue(inquiry.message);
+    expect(screen.getByRole("button", { name: "Send Message" })).toBeEnabled();
   });
 
   it("renders working hours", () => {

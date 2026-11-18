@@ -10,6 +10,7 @@ node_modules
 dist
 dist-ssr
 *.local
+/public/**/*.[pP][dD][fF]
 
 # Editor directories and files
 .vscode/*
