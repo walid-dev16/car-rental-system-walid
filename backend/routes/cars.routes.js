@@ -18,7 +18,7 @@ router.get("/", async (req, res) => {
 router.get("/available", async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT * FROM cars WHERE status = 'available' ORDER BY id"
+      "SELECT * FROM cars WHERE status = 'available' ORDER BY demo_display_order NULLS LAST, id"
     );
     res.json(result.rows);
   } catch (err) {

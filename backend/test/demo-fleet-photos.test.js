@@ -6,6 +6,7 @@ const { PGlite } = require('@electric-sql/pglite');
 
 let db;
 let photoMigration;
+let restorePhotos;
 const readMigration = (name) => fs.readFile(path.join(__dirname, '../migrations', name), 'utf8');
 const photos = async () => (await db.query('SELECT image_url FROM cars ORDER BY id')).rows.map(row => row.image_url);
 const otherFields = async () => (await db.query("SELECT to_jsonb(cars) - 'image_url' AS fields FROM cars ORDER BY id")).rows;
@@ -15,6 +16,7 @@ before(async () => {
   await db.exec(await readMigration('001_initial_schema.sql'));
   await db.exec(await readMigration('002_demo_fleet.sql'));
   photoMigration = await readMigration('003_demo_fleet_photos.sql');
+  restorePhotos = await readMigration('004_restore_original_fleet_photos.sql');
 });
 beforeEach(() => db.query('BEGIN'));
 afterEach(() => db.query('ROLLBACK'));
@@ -46,4 +48,30 @@ test('edited photos and vehicles with a different plate, make or model stay inta
   expected[7] = '/fleet/cle.webp';
   await db.exec(photoMigration);
   assert.deepEqual(await photos(), expected);
+});
+
+test('three original demo photos return and the BMW 3 Series uses its local fleet photo', async () => {
+  const originalPhotos = await photos();
+  const originalFields = await otherFields();
+  await db.exec(photoMigration);
+  const bundledPhotos = await photos();
+  const expected = originalPhotos.map((url, index) => url ?? bundledPhotos[index]);
+  expected[1] = 'https://img.sixt.com/2800/c5a6dbe6-7652-41ff-985c-e27313f9ba8c.jpg';
+  assert.equal((await db.query(restorePhotos)).affectedRows, 4);
+  assert.deepEqual(await photos(), expected);
+  assert.deepEqual(await otherFields(), originalFields);
+  assert.equal((await db.query(restorePhotos)).affectedRows, 0);
+});
+
+test('restoration preserves a custom photo and replacements on other vehicles', async () => {
+  await db.exec(photoMigration);
+  await db.exec(`
+    UPDATE cars SET brand = 'Different' WHERE id = 2;
+    UPDATE cars SET image_url = '/custom/x5.jpg' WHERE id = 9;
+    UPDATE cars SET plate_number = 'CHANGED-1013' WHERE id = 13;
+    UPDATE cars SET model = 'Different' WHERE id = 14;
+  `);
+  const before = await photos();
+  assert.equal((await db.query(restorePhotos)).affectedRows, 0);
+  assert.deepEqual(await photos(), before);
 });

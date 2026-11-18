@@ -60,7 +60,7 @@ before(async () => {
   }
   await migrate();
   assert.equal((await query('SELECT COUNT(*)::int AS count FROM users')).rows[0].count, 4, 'migration rerun must retain users');
-  assert.equal((await query('SELECT COUNT(*)::int AS count FROM cars')).rows[0].count, 8, 'demo seed must not duplicate cars');
+  assert.equal((await query('SELECT COUNT(*)::int AS count FROM cars')).rows[0].count, 13, 'demo seed must not duplicate cars');
   server = require('../app').listen(0, '127.0.0.1');
   await once(server, 'listening');
   base = `http://127.0.0.1:${server.address().port}`;
@@ -77,7 +77,12 @@ after(async () => {
 test('public fleet, isolated JSON API, security headers and private paths', async () => {
   const cars = await request('GET', '/api/cars');
   assert.equal(cars.status, 200);
-  assert.equal(cars.data.length, 8);
+  assert.equal(cars.data.length, 13);
+  const available = await request('GET', '/api/cars/available');
+  assert.equal(available.status, 200);
+  assert.equal(available.data.length, 12);
+  assert.deepEqual(available.data.slice(0, 3).map(car => car.model), ['X5', 'X3 M40', '3ER']);
+  assert.ok(available.data.every(car => car.image_url));
   assert.equal(cars.response.headers.get('x-content-type-options'), 'nosniff');
   assert.match(cars.response.headers.get('content-security-policy'), /frame-ancestors 'none'/);
   assert.equal((await request('GET', '/api/not-a-route', undefined, undefined, { accept: 'text/html' })).status, 404);
