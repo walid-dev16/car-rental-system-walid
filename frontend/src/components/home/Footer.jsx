@@ -138,9 +138,6 @@ export default function Footer() {
           <p>© 2026 AutoLuxe Premium Car Rental. All rights reserved.</p>
 
           <div className="flex flex-wrap gap-5">
-            <a href="/fleet/credits.html" className="transition hover:text-white">
-              Vehicle photo credits
-            </a>
             <Link to="/" className="transition hover:text-white">
               Home
             </Link>

@@ -77,11 +77,13 @@ after(async () => {
 test('public fleet, isolated JSON API, security headers and private paths', async () => {
   const cars = await request('GET', '/api/cars');
   assert.equal(cars.status, 200);
-  assert.equal(cars.data.length, 13);
+  assert.equal(cars.data.length, 9);
   const available = await request('GET', '/api/cars/available');
   assert.equal(available.status, 200);
-  assert.equal(available.data.length, 12);
-  assert.deepEqual(available.data.slice(0, 3).map(car => car.model), ['X5', 'X3 M40', '3ER']);
+  assert.equal(available.data.length, 9);
+  const order = ['X5', 'X3 M40', '3ER', 'A3', 'A6 E-Tron', 'CLE', 'E-Class', '911 Cabrio', 'Chiron'];
+  assert.deepEqual(cars.data.map(car => car.model), order);
+  assert.deepEqual(available.data.map(car => car.model), order);
   assert.ok(available.data.every(car => car.image_url));
   assert.equal(cars.response.headers.get('x-content-type-options'), 'nosniff');
   assert.match(cars.response.headers.get('content-security-policy'), /frame-ancestors 'none'/);
@@ -123,37 +125,60 @@ test('registration validates secrets and cannot select admin authority', async (
 });
 
 test('booking owner is identity-bound and quote is computed from database price', async () => {
-  const spoof = await request('POST', '/api/bookings', booking(1, { user_id: users.other.id, total_price: -1 }), token(users.customer));
+  const spoof = await request('POST', '/api/bookings', booking(2, { user_id: users.other.id, total_price: -1 }), token(users.customer));
   assert.equal(spoof.status, 403);
-  const created = await request('POST', '/api/bookings', booking(1, { user_id: users.customer.id, total_price: -1 }), token(users.customer));
+  const created = await request('POST', '/api/bookings', booking(2, { user_id: users.customer.id, total_price: -1 }), token(users.customer));
   assert.equal(created.status, 201);
   assert.equal(String(created.data.user_id), String(users.customer.id));
-  assert.equal(Number(created.data.total_price), 90);
+  assert.equal(Number(created.data.total_price), 300);
   assert.ok(created.data.expires_at);
-  assert.equal((await request('POST', '/api/bookings', booking(1), token(users.other))).status, 409);
+  assert.equal((await request('POST', '/api/bookings', booking(2), token(users.other))).status, 409);
   const mine = await request('GET', '/api/bookings/my', undefined, token(users.other));
   assert.equal(mine.data.length, 0);
 });
 
 test('long holds, maintenance cars and excessive customer requests are bounded', async () => {
-  const long = booking(2);
+  const long = booking(9);
   long.return_datetime = new Date(Date.parse(long.pickup_datetime) + 100 * 86400000).toISOString();
   assert.equal((await request('POST', '/api/bookings', long, token(users.customer))).status, 400);
-  assert.equal((await request('POST', '/api/bookings', booking(3), token(users.customer))).status, 409);
-  assert.equal((await request('POST', '/api/bookings', booking(2), token(users.customer))).status, 201);
-  assert.equal((await request('POST', '/api/bookings', booking(4), token(users.customer))).status, 201);
-  assert.equal((await request('POST', '/api/bookings', booking(5), token(users.customer))).status, 409);
+  assert.equal((await request('POST', '/api/bookings', booking(3), token(users.staff))).status, 409);
+  assert.equal((await request('POST', '/api/bookings', booking(9), token(users.customer))).status, 201);
+  assert.equal((await request('POST', '/api/bookings', booking(13), token(users.customer))).status, 201);
+  assert.equal((await request('POST', '/api/bookings', booking(14), token(users.customer))).status, 409);
 });
 
 test('expired holds release inventory and cannot be confirmed over another booking', async () => {
-  await query("UPDATE bookings SET expires_at=NOW()-INTERVAL '1 minute' WHERE car_id=1");
-  const expired = (await query('SELECT id FROM bookings WHERE car_id=1')).rows[0];
-  const replacement = await request('POST', '/api/bookings', booking(1), token(users.other));
+  await query("UPDATE bookings SET expires_at=NOW()-INTERVAL '1 minute' WHERE car_id=2");
+  const expired = (await query('SELECT id FROM bookings WHERE car_id=2')).rows[0];
+  const replacement = await request('POST', '/api/bookings', booking(2), token(users.other));
   assert.equal(replacement.status, 201);
   assert.equal((await request('PATCH', `/api/bookings/${expired.id}/complete`, {}, token(users.staff))).status, 409);
   const confirmed = await request('PATCH', `/api/bookings/${replacement.data.id}/complete`, {}, token(users.staff));
   assert.equal(confirmed.status, 200);
-  assert.equal(Number(confirmed.data.booking.total_price), 90);
+  assert.equal(Number(confirmed.data.booking.total_price), 300);
+});
+
+test('unlisting cars preserves staff inventory and previous reservations while preventing new customer bookings', async () => {
+  const hidden = ['Toyota Corolla', 'Hyundai Tucson', 'Mercedes C200', 'Volkswagen Polo'];
+  assert.equal((await request('GET', '/api/cars/inventory')).status, 401);
+  assert.equal((await request('GET', '/api/cars/inventory', undefined, token(users.customer))).status, 403);
+  const inventory = await request('GET', '/api/cars/inventory', undefined, token(users.admin));
+  assert.equal(inventory.status, 200);
+  assert.equal(inventory.data.length, 13);
+  assert.equal((await request('GET', '/api/cars/inventory', undefined, token(users.staff))).data.length, 13);
+  const unlisted = inventory.data.filter(car => !car.is_listed);
+  assert.deepEqual(unlisted.map(car => car.brand + ' ' + car.model), hidden);
+  for (const car of unlisted) {
+    const details = '/api/cars/' + car.id;
+    assert.equal((await request('GET', details)).status, 404);
+    assert.equal((await request('GET', details, undefined, token(users.customer))).status, 404);
+  }
+  assert.equal((await request('POST', '/api/bookings', booking(1), token(users.other))).status, 404);
+  const historical = await query(`INSERT INTO bookings
+    (user_id,car_id,pickup_datetime,return_datetime,total_price,status)
+    VALUES ($1,1,'2020-01-01','2020-01-02',45,'cancelled') RETURNING id`, [users.other.id]);
+  const mine = await request('GET', '/api/bookings/my', undefined, token(users.other));
+  assert.ok(mine.data.some(b => b.id === historical.rows[0].id && b.car_model === 'Corolla'));
 });
 
 test('live roles and account deletion immediately affect existing bearer tokens', async () => {

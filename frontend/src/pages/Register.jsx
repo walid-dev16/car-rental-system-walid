@@ -1,8 +1,40 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { register as registerApi } from "../api/api.js";
-import { UserPlus, Car } from "lucide-react";
+import { UserPlus, Car, Eye, EyeOff } from "lucide-react";
 import { BRAND_NAME, BRAND_TAGLINE } from "../config/brand.js";
+
+function PasswordField({ name, label, visibilityLabel, ...inputProps }) {
+  const [visible, setVisible] = useState(false);
+  const id = `registration-${name}`;
+  return (
+    <>
+      <label htmlFor={id} className="block text-xs font-semibold text-gray-400 uppercase mb-2">
+        {label}
+      </label>
+      <div className="relative">
+        <input
+          {...inputProps}
+          id={id}
+          name={name}
+          type={visible ? "text" : "password"}
+          autoComplete="new-password"
+          required
+          className="w-full bg-[#222] border border-gray-700 text-white p-3 pr-12 rounded-lg focus:outline-none focus:border-[#ff5f00]"
+        />
+        <button
+          type="button"
+          aria-label={`${visible ? "Hide" : "Show"} ${visibilityLabel}`}
+          aria-controls={id}
+          onClick={() => setVisible(!visible)}
+          className="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-lg text-gray-400 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#ff5f00]"
+        >
+          {visible ? <EyeOff size={20} aria-hidden="true" /> : <Eye size={20} aria-hidden="true" />}
+        </button>
+      </div>
+    </>
+  );
+}
 
 export default function Register() {
   const navigate = useNavigate();
@@ -13,6 +45,10 @@ export default function Register() {
     email: "",
     password: "",
   });
+
+  const [confirmation, setConfirmation] = useState("");
+  const [checkedConfirmation, setCheckedConfirmation] = useState(false);
+  const mismatch = checkedConfirmation && confirmation !== formData.password;
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -26,6 +62,11 @@ export default function Register() {
     e.preventDefault();
     setError("");
     setSuccess("");
+    setCheckedConfirmation(true);
+    if (confirmation !== formData.password) {
+      e.currentTarget.elements.namedItem("password_confirmation").focus();
+      return;
+    }
     setLoading(true);
 
     try {
@@ -119,21 +160,34 @@ export default function Register() {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-gray-400 uppercase mb-2">
-              Password
-            </label>
-            <input
-              type="password"
+            <PasswordField
               name="password"
-              required
-              minLength={12}
-              maxLength={72}
-              autoComplete="new-password"
+              label="Password"
+              visibilityLabel="password"
               value={formData.password}
               onChange={handleChange}
-              className="w-full bg-[#222] border border-gray-700 text-white p-3 rounded-lg focus:outline-none focus:border-[#ff5f00]"
+              minLength={12}
+              maxLength={72}
               placeholder="At least 12 characters"
             />
+          </div>
+
+          <div>
+            <PasswordField
+              name="password_confirmation"
+              label="Confirm password"
+              visibilityLabel="password confirmation"
+              value={confirmation}
+              onChange={e => setConfirmation(e.target.value)}
+              placeholder="Re-enter your password"
+              aria-invalid={mismatch || undefined}
+              aria-describedby={mismatch ? "registration-confirmation-error" : undefined}
+            />
+            {mismatch && (
+              <p id="registration-confirmation-error" role="alert" className="mt-2 text-sm text-red-400">
+                Passwords do not match.
+              </p>
+            )}
           </div>
 
           <button

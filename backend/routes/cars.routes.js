@@ -8,7 +8,9 @@ const router = express.Router();
 /* Public routes for browsing cars */
 router.get("/", async (req, res) => {
   try {
-    const result = await pool.query("SELECT * FROM cars ORDER BY id");
+    const result = await pool.query(
+      "SELECT * FROM cars WHERE is_listed ORDER BY demo_display_order NULLS LAST, id"
+    );
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ message: "Server error" });
@@ -18,10 +20,20 @@ router.get("/", async (req, res) => {
 router.get("/available", async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT * FROM cars WHERE status = 'available' ORDER BY demo_display_order NULLS LAST, id"
+      "SELECT * FROM cars WHERE is_listed AND status = 'available' ORDER BY demo_display_order NULLS LAST, id"
     );
     res.json(result.rows);
   } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Inventory includes unlisted cars so staff can still service them and their bookings.
+router.get("/inventory", auth, allowRoles("admin", "staff"), async (req, res) => {
+  try {
+    const result = await pool.query("SELECT * FROM cars ORDER BY id");
+    res.json(result.rows);
+  } catch {
     res.status(500).json({ message: "Server error" });
   }
 });
@@ -30,7 +42,7 @@ router.get("/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
-    const result = await pool.query("SELECT * FROM cars WHERE id = $1", [id]);
+    const result = await pool.query("SELECT * FROM cars WHERE id = $1 AND is_listed", [id]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ message: "Car not found" });

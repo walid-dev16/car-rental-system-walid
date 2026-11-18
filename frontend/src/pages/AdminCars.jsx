@@ -194,6 +194,9 @@ export default function AdminCars() {
   return (
     <div className="min-h-screen bg-black p-8 text-white">
       <DashboardHeader title="Cars Management" />
+      <a href="/fleet/credits.html" className="mb-4 inline-block text-sm text-gray-400 hover:text-white">
+        Fleet photo credits
+      </a>
 
       {error && (
         <div className="mb-6 rounded-lg border border-red-500 bg-red-500/10 p-4 text-red-400">
@@ -447,6 +450,9 @@ export default function AdminCars() {
                     <h3 className="text-lg font-bold">
                       {car.brand} {car.model}
                     </h3>
+                    {car.is_listed === false && (
+                      <p className="text-sm text-amber-300">Hidden from public catalog</p>
+                    )}
 
                     <p className="text-sm text-gray-400">
                       {car.production_year} • {car.plate_number}

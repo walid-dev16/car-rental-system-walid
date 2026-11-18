@@ -125,7 +125,10 @@ router.post("/", auth, allowRoles("admin", "staff", "customer"), transaction(asy
     );
     if (Number(holds.rows[0].count) >= MAX_PENDING_PER_CUSTOMER) throw new BookingError(409, `A customer can have at most ${MAX_PENDING_PER_CUSTOMER} pending bookings`);
   }
-  const car = await client.query("SELECT status, daily_price FROM cars WHERE id = $1 FOR UPDATE", [input.car]);
+  const car = await client.query(
+    "SELECT status, daily_price FROM cars WHERE id = $1 AND (is_listed OR $2::boolean) FOR UPDATE",
+    [input.car, req.user.role !== "customer"]
+  );
   if (!car.rows.length) throw new BookingError(404, "Car not found");
   if (car.rows[0].status === "maintenance") throw new BookingError(409, "Car is currently in maintenance");
   await assertAvailable(client, input.car, input.pickup, input.returning);

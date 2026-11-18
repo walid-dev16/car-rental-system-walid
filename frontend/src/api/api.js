@@ -28,7 +28,7 @@ API.interceptors.request.use((req) => {
 export const login = (formData) => API.post('/auth/login', formData);
 export const register = (formData) => API.post('/auth/register', formData);
 
-export const fetchCars = () => API.get('/cars');
+export const fetchCars = () => API.get('/cars/inventory');
 export const fetchAvailableCars = () => API.get('/cars/available');
 export const addCar = (carData) => API.post('/cars', carData);
 export const editCar = (id, carData) => API.put(`/cars/${id}`, carData);

@@ -73,6 +73,42 @@ describe("Register Page", () => {
     expect(passwordInput.value).toBe("ValidPassword123!");
   });
 
+  it("toggles the visibility of each field independently", () => {
+    render(<MemoryRouter><Register /></MemoryRouter>);
+    const password = screen.getByLabelText("Password");
+    const confirmation = screen.getByLabelText("Confirm password");
+    expect(confirmation).toBeRequired();
+    expect(confirmation).toHaveAttribute("autocomplete", "new-password");
+
+    fireEvent.change(password, { target: { value: "sample-passphrase" } });
+    fireEvent.click(screen.getByRole("button", { name: "Show password" }));
+    expect(password).toHaveAttribute("type", "text");
+    expect(password).toHaveValue("sample-passphrase");
+    expect(confirmation).toHaveAttribute("type", "password");
+    fireEvent.click(screen.getByRole("button", { name: "Show password confirmation" }));
+    fireEvent.click(screen.getByRole("button", { name: "Hide password" }));
+    expect(password).toHaveAttribute("type", "password");
+    expect(confirmation).toHaveAttribute("type", "text");
+    fireEvent.click(screen.getByRole("button", { name: "Hide password confirmation" }));
+    expect(confirmation).toHaveAttribute("type", "password");
+    expect(mockRegisterApi).not.toHaveBeenCalled();
+  });
+
+  it("blocks mismatched passwords and clears the mismatch when they match", () => {
+    render(<MemoryRouter><Register /></MemoryRouter>);
+    const password = screen.getByLabelText("Password");
+    const confirmation = screen.getByLabelText("Confirm password");
+    fireEvent.change(password, { target: { value: "sample-passphrase" } });
+    fireEvent.change(confirmation, { target: { value: "different-passphrase" } });
+    fireEvent.submit(password.form);
+    expect(mockRegisterApi).not.toHaveBeenCalled();
+    expect(confirmation).toHaveFocus();
+    expect(confirmation).toHaveAccessibleDescription("Passwords do not match.");
+    expect(confirmation).toHaveAttribute("aria-invalid", "true");
+    fireEvent.change(confirmation, { target: { value: "sample-passphrase" } });
+    expect(screen.queryByText("Passwords do not match.")).not.toBeInTheDocument();
+  });
+
   it("shows loading state while submitting", async () => {
     mockRegisterApi.mockImplementation(
       () =>
@@ -100,9 +136,12 @@ describe("Register Page", () => {
       target: { name: "password", value: "ValidPassword123!" },
     });
 
+    fireEvent.change(screen.getByLabelText("Confirm password"), {
+      target: { value: "ValidPassword123!" },
+    });
     fireEvent.click(screen.getByRole("button", { name: /Register/i }));
 
-    expect(screen.getByRole("button")).toHaveTextContent(/Creating account.../i);
+    expect(screen.getByRole("button", { name: /Creating account/i })).toBeDisabled();
 
     await waitFor(() => {
       expect(mockRegisterApi).toHaveBeenCalled();
@@ -131,6 +170,9 @@ describe("Register Page", () => {
       target: { name: "password", value: "ValidPassword123!" },
     });
 
+    fireEvent.change(screen.getByLabelText("Confirm password"), {
+      target: { value: "ValidPassword123!" },
+    });
     fireEvent.click(screen.getByRole("button", { name: /Register/i }));
 
     expect(mockRegisterApi).toHaveBeenCalledWith({
@@ -173,6 +215,9 @@ describe("Register Page", () => {
       target: { name: "password", value: "ValidPassword123!" },
     });
 
+    fireEvent.change(screen.getByLabelText("Confirm password"), {
+      target: { value: "ValidPassword123!" },
+    });
     fireEvent.click(screen.getByRole("button", { name: /Register/i }));
 
     await waitFor(() => {

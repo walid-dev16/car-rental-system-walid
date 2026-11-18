@@ -122,7 +122,8 @@ test("production serves the eight credited demo fleet photos as WebP images", as
   const credits = await request("/fleet/credits.html");
   assert.equal(credits.status, 200);
   const page = await credits.text();
-  const names = [...page.matchAll(/<img\s+src="([^"]+\.webp)"/g)].map(match => match[1]);
+  assert.doesNotMatch(page, /<img\b/i);
+  const names = [...page.matchAll(/<a href="([^"]+\.webp)"/g)].map(match => match[1]);
   assert.equal(new Set(names).size, 8);
   for (const name of names) {
     const image = await request(`/fleet/${name}`);

@@ -9,8 +9,9 @@ export default function CarDetailsPage() {
   const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem("user") || "null");
 
-  const [car, setCar] = useState(null);
-  const [error, setError] = useState("");
+  const [result, setResult] = useState(null);
+  const car = result?.id === id ? result.car : null;
+  const error = result?.id === id ? result.error : "";
   const [infoMessage, setInfoMessage] = useState("");
   const [openSection, setOpenSection] = useState({
     technical: true,
@@ -20,28 +21,20 @@ export default function CarDetailsPage() {
 
   /* Load selected car details when route id changes */
   useEffect(() => {
+    let current = true;
     const loadCar = async () => {
       try {
         const { data } = await API.get(`/cars/${id}`);
-        setCar(data);
-      } catch {
-        setError("Failed to load car details.");
+        if (current) setResult({ id, car: data });
+      } catch (err) {
+        if (current) setResult({ id, error: err.response?.status === 404
+          ? "This car is not available in the catalog." : "Failed to load car details." });
       }
     };
 
     loadCar();
+    return () => { current = false; };
   }, [id]);
-
-  /* Auto-clear error message after a short delay */
-  useEffect(() => {
-    if (error) {
-      const timer = setTimeout(() => {
-        setError("");
-      }, 3000);
-
-      return () => clearTimeout(timer);
-    }
-  }, [error]);
 
   function toggleSection(section) {
     setOpenSection((prev) => ({
@@ -68,6 +61,7 @@ export default function CarDetailsPage() {
           <p className={error ? "text-red-400" : "text-gray-400"}>
             {error || "Loading car details..."}
           </p>
+          {error && <Link to="/cars" className="mt-4 inline-block text-[#ff5f00]">Back to cars</Link>}
         </div>
         <Footer />
       </div>
@@ -113,12 +107,6 @@ export default function CarDetailsPage() {
       )}
 
       <section className="mx-auto max-w-[1500px] px-6 py-10">
-        {error && (
-          <div className="mb-6 rounded-lg border border-red-500 bg-red-500/10 p-4 text-red-400">
-            {error}
-          </div>
-        )}
-
         <div className="mb-6">
           <Link
             to="/cars"
